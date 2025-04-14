@@ -1,0 +1,126 @@
+body {
+    background-image: url('background_image_alt2.jpg'); /* relative to your site's root */
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    min-height: 100vh;
+    margin: 0;
+    font-family: Arial, sans-serif;
+  }
+  
+  /* Hide elements by default */
+  .hidden {
+    display: none;
+  }
+  
+  /* Login Modal */
+  #loginModal {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6); /* slightly less opaque than 0.8 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  
+  /* Admin Panel Modal */
+  #adminPanelModal:not(.hidden) {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0, 0, 0, 0.6); /* also slightly less opaque */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1100;
+  }
+  
+  .modal-content {
+    background: #fff;
+    padding: 20px;
+    border-radius: 5px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+  }
+  
+  #pinFormTemplate {
+    max-width: 350px;
+    width: 90%;
+    border-radius:3px;
+    
+  }
+  /* Adjust .modal-content for admin panel if you want it bigger */
+  #adminPanelModal .modal-content {
+    max-width: 600px;
+  }
+  
+  /* Map container styling */
+  #map {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: auto;
+    height: 65vh;
+    box-sizing: border-box;
+    width: 65%;
+  }
+  
+  /* Tagline styling */
+  #tagline_text {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: 0.5em auto;
+    padding: 0.1em;
+    width: fit-content;
+    box-sizing: border-box;
+    color: white;
+    background-color: rgba(0, 0, 0, 0.5);
+    font-size: 1.25em;
+  }
+  
+  /* Header styling */
+  #header_title {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    margin: auto;
+    box-sizing: border-box;
+    color: #f3f5f2;
+    text-shadow: 3px 3px 4px black;
+    font-size: 3em;
+    position: relative;
+  }
+  
+  /* Admin Panel button */
+  #adminPanelBtn {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    padding: 5px 10px;
+    font-size: 1em;
+    cursor: pointer;
+  }
+  
+  /* Footer styling */
+  footer {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    text-shadow: 
+      -3px -3px 2px black,  
+       3px -3px 2px black,
+      -3px  3px 2px black,
+       3px  3px 2px black,
+      -3px  0px 2px black,
+       3px  0px 2px black,
+       0px -3px 2px black,
+       0px  3px 2px black;
+    margin-top: 1em;
+  }
+  

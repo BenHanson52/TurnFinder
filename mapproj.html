@@ -1,0 +1,674 @@
+<!-- FRONTEND CODE (mapproj.html) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CO Summer Skiing</title>
+  <link rel="stylesheet" href="mapstyles.css">
+  
+  <!-- The link to leaflet's style sheet, the library that I'm using to render my map -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="">
+  <!-- Adding the browser-image-compression library so I can compress images on the front end
+       and avoid having to deal with that stuff on my backend -->
+  <script src="https://unpkg.com/browser-image-compression/dist/browser-image-compression.js"></script>
+  
+</head>
+<body>
+  <header>
+    <h4 id="header_title">Summertime Skiing in Colorado</h4>
+    <!-- admin Panel button (only visible if the user is admin) -->
+    <button id="adminPanelBtn" class="hidden">Admin Panel</button>
+  </header>
+  <p id="tagline_text">A user-driven off-season snow conditions reporting site</p>
+  <div id="map"></div>
+  <main>
+    <footer>
+      <!-- footer -->
+      <p>Email: summertimeskiingco@gmail.com</p>
+      <p>Powered by Leaflet, Esri, and OpenStreetMap</p>
+    </footer>
+  </main>
+
+  <!-- admin panel modal, hidden by default.. do i want this visible here? -->
+  <div id="adminPanelModal" class="hidden">
+    <div class="modal-content">
+      <h2>Admin Panel - Users</h2>
+      <button id="closeAdminPanel">Close</button>
+      <table id="usersTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Username</th>
+            <th>Role</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Template for the pin form -->
+  <template id="pinFormTemplate">
+    <form id="pinForm" enctype="multipart/form-data">
+      <label for="name">Name:</label>
+      <input type="text" id="name" name="name" required>
+      
+      <label for="description">Description:</label>
+      <textarea id="description" name="description"></textarea>
+      
+      <label for="image">Upload Image:</label>
+      <input type="file" id="image" name="image">
+      
+      <!-- Hidden inputs for lat/lng as leaflet pulls that data when the user creates a pin -->
+      <input type="hidden" id="lat" name="lat">
+      <input type="hidden" id="lng" name="lng">
+      
+      <button id="submitbtn" type="button">Submit Pin</button>
+    </form>
+  </template>
+
+  <!-- Login modal -->
+  <div id="loginModal">
+    <div class="modal-content">
+      <h2 id="formTitle">Please Log In</h2>
+      <form id="loginForm">
+        <div class="login-fields">
+          <!-- Login fields (always visible) -->
+          <label for="username">Username:</label>
+          <input type="text" id="username" name="username" required>
+
+          <br>
+          <label for="password">Password:</label>
+          <input type="password" id="password" name="password" required>
+        </div>
+        <div class="registration-fields hidden">
+          <!-- registration-specific fields (hidden by default) -->
+          <label for="new_username">New Username:</label>
+          <input type="text" id="new_username" name="new_username" placeholder="Enter new username...">
+
+          <br>
+          <label for="new_password">New Password:</label>
+          <input type="password" id="new_password" name="new_password" placeholder="Enter new password...">
+        </div>
+        <div>
+          <!-- ghe submit button text will change based on mode -->
+          <button type="submit" id="submitBtn">Login</button>
+          <!-- toggle button to switch between Login and Create Account mode -->
+          <button type="button" id="toggleBtn">Create Account</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- a link to Leaflet's JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+          crossorigin=""></script>
+  <!-- a link to Esri's Leaflet JS that allows me to have a control panel to 
+       let users select what layers they want to say-->
+  <script src="https://unpkg.com/esri-leaflet"></script>
+
+  <script>
+    // shows admin panel button if user role is admin.
+    const currentRole = localStorage.getItem('role');
+    if (currentRole === 'admin') {
+      document.getElementById('adminPanelBtn').classList.remove('hidden');
+    }
+
+    // admin Panel pop-up data grab from backend
+    document.getElementById('adminPanelBtn').addEventListener('click', async function() {
+      const authCredentials = localStorage.getItem('authCredentials');
+      if (!authCredentials) {
+        alert("You are not logged in as admin!");
+        return;
+      }
+      try {
+        const response = await fetch('/api/admin/users', {
+          headers: {
+            'Authorization': 'Basic ' + authCredentials
+          }
+        });
+        if (response.ok) {
+          //await keyword waits parsing to finish
+          const users = await response.json();
+          const tbody = document.querySelector('#usersTable tbody');
+          tbody.innerHTML = "";
+          users.forEach(user => {
+            const row = document.createElement('tr');
+            row.innerHTML = `<td>${user.id}</td><td>${user.username}</td><td>${user.role}</td>`;
+            tbody.appendChild(row);
+          });
+          
+          document.getElementById('adminPanelModal').classList.remove('hidden');
+        } else {
+          alert("Error loading users: " + response.status);
+        }
+      } catch (err) {
+        console.error("Error:", err);
+        alert("An error occurred.");
+      }
+    });
+
+   
+    document.getElementById('closeAdminPanel').addEventListener('click', function() {
+      document.getElementById('adminPanelModal').classList.add('hidden');
+    });
+
+    // initializing the map, centered on Berthoud Pass
+    // Must define map before referencing it anywhere else.
+    const map = L.map('map').setView([39.7983, -105.7778], 8.5);
+
+    const pinsGroup = L.layerGroup().addTo(map);
+
+    function getCurrentUsername() {
+      const authCredentials = localStorage.getItem('authCredentials');
+      if (!authCredentials) return "";
+      return atob(authCredentials).split(':')[0];
+    }
+
+    function getCurrentUserRole() {
+      return localStorage.getItem('role') || "";
+    }
+
+    // Function to load pins dynamically via AJAX.
+    async function loadPins() {
+      try {
+        const response = await fetch('/api/endpoint');
+        const data = await response.json();
+        // Clear existing markers in pinsGroup.
+        pinsGroup.clearLayers();
+        // Retrieve current username and role from stored credentials.
+        const currentUsername = getCurrentUsername();
+        const currentRole = getCurrentUserRole();
+        data.forEach(pin => {
+          const latNum = parseFloat(pin.lat);
+          const lngNum = parseFloat(pin.lng);
+          const marker = L.marker([latNum, lngNum]);
+          // Build basic popup content.
+          let popupContent = `<strong>${pin.name}</strong><br>
+                              ${pin.description}<br>`;
+          if (pin.imageUrl) {
+            popupContent += `<img src="${pin.imageUrl}?t=${Date.now()}" width="120" alt="Pin Image"><br>`;
+          }
+          // If the current user is the owner OR is an admin, add Edit and Delete buttons.
+          if ((pin.username && pin.username === currentUsername) || currentRole === 'admin') {
+            popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>
+                             <button class="delete-pin" data-id="${pin.id}">Delete</button>`;
+          }
+          marker.bindPopup(popupContent);
+          pinsGroup.addLayer(marker);
+        });
+      } catch (error) {
+        console.error('Error fetching pins:', error);
+      }
+    }
+
+    // Check login state on page load.
+    window.addEventListener('DOMContentLoaded', function() {
+      const isLoggedIn = localStorage.getItem('loggedIn');
+      if (!isLoggedIn) {
+        // Show the login modal if not logged in.
+        document.getElementById('loginModal').style.display = 'flex';
+      }
+      // Initially load pins.
+      loadPins();
+    });
+
+    // Attach event listener to the login form.
+    document.getElementById('loginForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      // Check if we are in registration mode by testing if registration fields are visible.
+      const regFieldsVisible = !document.querySelector('.registration-fields').classList.contains('hidden');
+      if (regFieldsVisible) {
+        // Create Account mode
+        const new_username = document.getElementById('new_username').value;
+        const new_password = document.getElementById('new_password').value;
+        if (!new_username || !new_password) {
+          alert("Please fill in both new username and new password.");
+          return;
+        }
+        try {
+          const response = await fetch('/api/createAccount', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ new_username, new_password })
+          });
+          
+          if (response.status === 409) {
+            // The backend returned "Username already taken" due to ER_DUP_ENTRY
+            alert("Username already taken. Please choose a different username.");
+          } else if (response.ok) {
+            // Only do automatic login if we got a 201 response (response.ok)
+            // Attempt automatic login here:
+            const loginResponse = await fetch('/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: new_username, password: new_password })
+            });
+
+            if (loginResponse.ok) {
+              const data = await loginResponse.json();
+              // Set login state, credentials, and role.
+              localStorage.setItem('loggedIn', 'true');
+              localStorage.setItem('authCredentials', btoa(new_username + ':' + new_password));
+              localStorage.setItem('role', data.role);
+              // Hide the login modal.
+              document.getElementById('loginModal').style.display = 'none';
+              // Reload pins to include user-specific buttons.
+              loadPins();
+              // Show the admin panel button if role is admin.
+              if (data.role === 'admin') {
+                document.getElementById('adminPanelBtn').classList.remove('hidden');
+              }
+            } else {
+              alert("Account created, but automatic login failed. Please log in manually.");
+            }
+          } else {
+            // If it's not 409 or 2xx, show a generic error
+            alert("Account creation failed. Please try again.");
+          }
+        } catch (error) {
+          console.error('Error during account creation:', error);
+          alert("An error occurred. Please try again.");
+        }
+      } else {
+        // Login mode
+        const username = document.getElementById('username').value;
+        const password = document.getElementById('password').value;
+
+        try {
+          // Send the credentials to a new login endpoint.
+          const response = await fetch('/api/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+          });
+          
+          if (response.ok) {
+            const data = await response.json();
+            // If login is successful, set a flag and store credentials and role.
+            localStorage.setItem('loggedIn', 'true');
+            localStorage.setItem('authCredentials', btoa(username + ':' + password));
+            localStorage.setItem('role', data.role);
+            // Hide the modal.
+            document.getElementById('loginModal').style.display = 'none';
+            // Reload pins to include user-specific buttons.
+            loadPins();
+            // Show the admin panel button if user is admin.
+            if (data.role === 'admin') {
+              document.getElementById('adminPanelBtn').classList.remove('hidden');
+            }
+          } else {
+            alert('Login failed, please try again.');
+          }
+        } catch (error) {
+          console.error('Error during login:', error);
+          alert('An error occurred. Please try again.');
+        }
+      }
+    });
+
+    // Toggle between Login and Create Account mode.
+    document.getElementById('toggleBtn').addEventListener('click', function() {
+      // Select the registration fields container and login fields container
+      const loginFields = document.querySelector('.login-fields');
+      const regFields = document.querySelector('.registration-fields');
+      const submitBtn = document.getElementById('submitBtn');
+      const toggleBtn = document.getElementById('toggleBtn');
+      const formTitle = document.getElementById('formTitle');
+
+      const loginUsername = document.getElementById('username');
+      const loginPassword = document.getElementById('password');
+      const newUsername = document.getElementById('new_username');
+      const newPassword = document.getElementById('new_password');
+
+      // Check if registration fields are currently hidden.
+      const isRegistration = !regFields.classList.contains('hidden');
+      
+      if (!isRegistration) {
+        // Switch TO create account mode.
+        loginFields.classList.add('hidden');
+        regFields.classList.remove('hidden');
+
+        // Remove required from login fields.
+        loginUsername.removeAttribute('required');
+        loginPassword.removeAttribute('required');
+
+        // Add required to registration fields.
+        newUsername.setAttribute('required', 'true');
+        newPassword.setAttribute('required', 'true');
+
+        formTitle.textContent = "Create Account";
+        submitBtn.textContent = "Create Account";
+        toggleBtn.textContent = "Cancel";
+      } else {
+        // Switch BACK to login mode.
+        loginFields.classList.remove('hidden');
+        regFields.classList.add('hidden');
+
+        // Add required back to login fields.
+        loginUsername.setAttribute('required', 'true');
+        loginPassword.setAttribute('required', 'true');
+
+        // Remove required from registration fields.
+        newUsername.removeAttribute('required');
+        newPassword.removeAttribute('required');
+
+        formTitle.textContent = "Please Log In";
+        submitBtn.textContent = "Login";
+        toggleBtn.textContent = "Create Account";
+      }
+    });
+
+    // Global event delegation for Edit and Delete buttons in popups.
+    document.addEventListener('click', async (e) => {
+      // Edit pin
+      if (e.target && e.target.classList.contains('edit-pin')) {
+        const pinId = e.target.getAttribute('data-id');
+        const currentName = decodeURIComponent(e.target.getAttribute('data-name'));
+        const currentDescription = decodeURIComponent(e.target.getAttribute('data-description'));
+        const newName = prompt("Enter new pin name:", currentName);
+        const newDescription = prompt("Enter new description:", currentDescription);
+        if (newName !== null && newDescription !== null) {
+          try {
+            const auth = localStorage.getItem('authCredentials');
+            const response = await fetch('/api/endpoint', {
+              method: 'PUT',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Basic ' + auth
+              },
+              body: JSON.stringify({
+                id: pinId,
+                name: newName,
+                description: newDescription
+              })
+            });
+            if (response.ok) {
+              alert("Pin updated successfully.");
+              // Dynamically reload pins without a full page refresh.
+              loadPins();
+            } else {
+              alert("Failed to update pin.");
+            }
+          } catch (err) {
+            console.error("Error updating pin:", err);
+            alert("Error updating pin.");
+          }
+        }
+      }
+      // Delete pin
+      if (e.target && e.target.classList.contains('delete-pin')) {
+        const pinId = e.target.getAttribute('data-id');
+        if (confirm("Are you sure you want to delete this pin?")) {
+          try {
+            const auth = localStorage.getItem('authCredentials');
+            const response = await fetch('/api/endpoint', {
+              method: 'DELETE',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Basic ' + auth
+              },
+              body: JSON.stringify({ id: pinId })
+            });
+            if (response.ok) {
+              alert("Pin deleted successfully.");
+              // Dynamically reload pins without a full page refresh.
+              loadPins();
+            } else {
+              alert("Failed to delete pin.");
+            }
+          } catch (err) {
+            console.error("Error deleting pin:", err);
+            alert("Error deleting pin.");
+          }
+        }
+      }
+    });
+
+    // following 3 blocks are my 3 basemap layers, tileLayer is a leaflet module that
+    // ensures they're base layers rather than overlays
+    const USGS_USTopo = L.tileLayer(
+      'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 25,
+        attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+      }
+    );
+    const USGS_USImageryTopo = L.tileLayer(
+      'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 25,
+        attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+      }
+    );
+    const USGS_sat = L.tileLayer(
+      'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
+      {
+        maxZoom: 25,
+        attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+      }
+    );
+    //initializing my map with the combined satellite imagery and topography
+    map.addLayer(USGS_USImageryTopo);
+
+    // functionality for adding a pin (moved the map definition above so we can use it here)
+    map.on('click', function(e) {
+      const isLoggedIn = localStorage.getItem('loggedIn');
+      if (!isLoggedIn) {
+        // Show the login modal if not logged in
+        document.getElementById('loginModal').style.display = 'flex';
+        return; // Exit; do not allow pin creation.
+      }
+      console.log("Map clicked at:", e.latlng);
+
+      // creates a new marker at the clicked location but that marker won't stay
+      // unless the user submits it with the required info attached
+      const newMarker = L.marker(e.latlng);
+      pinsGroup.addLayer(newMarker);
+      newMarker.submitted = false;
+
+      // removes the marker if the popup is closed without submission.
+      newMarker.on('popupclose', () => {
+        if (!newMarker.submitted) {
+          pinsGroup.removeLayer(newMarker);
+        }
+      });
+
+      // cloning the template for the form so it can be reused fresh
+      // for each pin
+      const template = document.getElementById('pinFormTemplate');
+      const formClone = document.importNode(template.content, true);
+      // grabbing the form from the cloned template
+      const userPin = formClone.querySelector('#pinForm');
+
+      // having leaflet set the lat/lng values itself
+      userPin.querySelector('#lat').value = e.latlng.lat;
+      userPin.querySelector('#lng').value = e.latlng.lng;
+
+      // attaching an async event listener to the form so that
+      // it'll update without the user having to refresh the page
+      userPin.addEventListener('submit', async function(ev) {
+        ev.preventDefault(); // Prevent native submission.
+        console.log("Form submit event fired!");
+
+        // this grabs the image file's 'name'
+        const fileInput = userPin.querySelector('input[name="image"]');
+        
+        // if a user does choose to upload an image, this compresses it,
+        // saving a ton of headache of sending huge files to my server, and 
+        // then having to compress that on my backend
+        if (fileInput && fileInput.files && fileInput.files.length > 0) {
+          const originalFile = fileInput.files[0];
+          const options = {
+            maxSizeMB: 5,            // maximum 5MB file size
+            maxWidthOrHeight: 800,   // resizes photo if dimensions exceed 800px so it'll fit in the pop up.
+            useWebWorker: true
+          };
+
+          // wrapping this in a try block in case the user does not upload a photo
+          try {
+            const compressedBlob = await imageCompression(originalFile, options);
+            console.log("Compressed file blob:", compressedBlob);
+
+            // converts blob file type to a file object. Stubbed my toe on this concept pretty badly
+            const compressedFile = new File(
+              [compressedBlob],
+              originalFile.name,
+              { type: compressedBlob.type }
+            );
+
+            // this block makes sure the compressed version of the image is being sent to my backend
+            const dt = new DataTransfer();
+            dt.items.add(compressedFile);
+            fileInput.files = dt.files;
+            console.log("File input after compression:", fileInput.files);
+          } catch (compressionError) {
+            console.error("Error compressing image:", compressionError);
+          }
+        } else if (fileInput) {
+          // if no image was uploaded, this removes the file input.
+          fileInput.parentNode.removeChild(fileInput);
+        }
+
+        // creating formdata from the userpin form so that
+        // my backend can process it
+        const formData = new FormData(userPin);
+        console.log("Sending POST request with formData...");
+
+        // Add the Authorization header for pin creation using stored credentials.
+        const authCredentials = localStorage.getItem('authCredentials');
+        let headers = {};
+        if (authCredentials) {
+          headers['Authorization'] = 'Basic ' + authCredentials;
+        }
+        
+        //wrapped in a try block as this was a major source of bugs
+        // and i wanted debugging statements when this failed
+        try {
+          const response = await fetch('/api/endpoint', {
+            method: 'POST',
+            headers: headers,
+            body: formData
+          });
+
+          const data = await response.json();
+          console.log("Received data:", data);
+
+          //checking that the data is associated with an id
+          //if it is, we render the pop up with the image included
+          // ?t=${Date.now()} is a 'cache-busting' technique that ensures
+          // new images are displayed immediately.
+          if (data.id) {
+            // Build popup content immediately with Edit/Delete if user owns it.
+            let popupContent = `
+              <strong>${data.name}</strong><br>
+              ${data.description}<br>
+            `;
+            if (data.imageUrl) {
+              popupContent += `<img src="${data.imageUrl}?t=${Date.now()}" width="120" alt="Pin Image"><br>`;
+            }
+            // Determine current user and role
+            const authCreds = localStorage.getItem('authCredentials');
+            let currentUser = "";
+            if (authCreds) {
+              currentUser = atob(authCreds).split(':')[0];
+            }
+            const currentRole = localStorage.getItem('role');
+            // If the logged-in user is the owner or is an admin, add buttons.
+            if (data.username === currentUser || currentRole === 'admin') {
+              popupContent += `
+                <button class="edit-pin" data-id="${data.id}" data-name="${encodeURIComponent(data.name)}" data-description="${encodeURIComponent(data.description)}">Edit</button>
+                <button class="delete-pin" data-id="${data.id}">Delete</button>
+              `;
+            }
+            newMarker.bindPopup(popupContent).openPopup();
+            newMarker.submitted = true;
+          } else {
+            
+            pinsGroup.removeLayer(newMarker);
+            alert("Submission failed. Please try again.");
+          }
+        } catch (fetchError) {
+          console.error("Error during fetch:", fetchError);
+          pinsGroup.removeLayer(newMarker);
+          alert("Submission failed. Please try again.");
+        }
+      });
+      
+      // making sure the submit button actually submits..
+      const submitBtn = userPin.querySelector('#submitbtn');
+      if (submitBtn) {
+        submitBtn.addEventListener('click', function() {
+          console.log("Submit button clicked!");
+          userPin.dispatchEvent(new Event("submit", { cancelable: true }));
+        });
+      } else {
+        console.error("Submit button not found in the cloned form.");
+      }
+      
+      //this attaches the popup to the cloned form (the userpin form the user fills out)
+      newMarker.bindPopup(formClone, { maxWidth: 300 }).openPopup();
+    });
+
+    // the links to CO's ArcGIS stuff for rendering overlays
+    // there wasn't one federal land overlay so I combined all of them
+    // I may want to revisit this.
+    const federalLandURLs = [
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/68',
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/46',
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/63',
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/62',
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/57',
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/61',
+      'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/50'
+    ];
+
+    //the block below combines all of the overlays from the block above so the user won't
+    //have to have separate national forest, national grassland, BLM land, etc overlays
+    const fedLandLayer = L.featureGroup();
+    federalLandURLs.forEach(url => {
+      L.esri.featureLayer({
+        url: url,
+        style: function () {
+          return { color: "yellow", weight: 1, fillOpacity: 0.1 };
+        }
+      }).addTo(fedLandLayer);
+    });
+
+    //This adds the trailhead overlay, I need to make these pop ups smaller as I 
+    //want the focus to be on user-created pins
+    const trailheads = L.esri.featureLayer({
+      url: 'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/29',
+      pointToLayer: function (geojson, latlng) {
+      return L.circleMarker(latlng, {
+        radius: 4,           // size of the marker
+        fillColor: "green",  // fill color of the marker
+        color: "darkgreen",  // border color
+        weight: 1,           // border thickness
+        opacity: 1,          // overall opacity of the border
+        fillOpacity: 0.8     // opacity of the fill
+        });
+      }
+
+    });
+    //the menu for my base layers
+    const baseLayers = {
+      "Topographic": USGS_USTopo,
+      "Topo & Satellite": USGS_USImageryTopo,
+      "Satellite": USGS_sat
+    };
+    //menu for my overlays
+    const overlayLayers = {
+      "Federal Land": fedLandLayer,
+      "COTREX Trailheads": trailheads
+    };
+    //the actual control panel that handles base layers and overlays.
+    L.control.layers(baseLayers, overlayLayers).addTo(map);
+  </script>
+</body>
+</html>
