@@ -1,11 +1,21 @@
 // BACKEND CODE (mapproj_API.js)
+
 // ended up using mariadb on my server instead,
 // but this still works, same creators as mysql
 const mysql = require('mysql2');
 // having env var issues, commenting this out for now require('dotenv').config(); 
 const bcrypt = require('bcrypt');
 
-//this block securely connects my API to my database
+const url = require('url');
+require('dotenv').config();
+const https = require('https');
+const fs = require('fs');
+
+const options = {
+    key: fs.readFileSync(process.env.SSL_KEY_PATH),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH)
+  };
+
 console.log("DB_HOST:", process.env.DB_HOST);
 console.log("DB_USER:", process.env.DB_USER);
 console.log("DB_PASSWORD:", process.env.DB_PASSWORD);
@@ -40,15 +50,6 @@ async function createUser(username, plaintextPassword, role) {
         throw error;
     }
 }
-module.exports = connection;
-
-// spinning up the node
-console.log("Starting mapproj_API.js");
-
-const http = require('http');
-const url = require('url');
-
-const port = 3000;
 
 // decodes auth header to get username of active user
 function getUsernameFromAuth(req) {
@@ -73,7 +74,7 @@ function getUserRole(username, callback) {
 }
 
 //creating the server
-const server = http.createServer((req, res) => {
+const server = https.createServer(options, (req, res) => {
     const parsedUrl = url.parse(req.url, true);
     console.log("Requested path:", parsedUrl.pathname);
     console.log("HTTP method:", req.method);
@@ -356,9 +357,8 @@ const server = http.createServer((req, res) => {
                 }
                 console.log("Inserted new record with id:", result.insertId);
 
-                // returns the newly created record with flattened fields (non-arrays) to my server
-                res.writeHead(201, { 'Content-Type': 'application/json' });
-                return res.end(JSON.stringify({
+                // Create the newPinData object using the inserted record details
+                const newPinData = {
                     id: result.insertId,
                     name: nameVal,
                     description: descVal,
@@ -366,7 +366,14 @@ const server = http.createServer((req, res) => {
                     lat: latVal,
                     lng: lngVal,
                     username: loggedInUsername
-                }));
+                };
+
+                // NEW: Broadcast the new pin to WebSocket clients.
+                global.broadcast.broadcastPinCreate(wss, newPinData);
+
+                // Return the new pin to the client via HTTP response
+                res.writeHead(201, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(newPinData));
             }
             );
         });
@@ -425,8 +432,12 @@ const server = http.createServer((req, res) => {
                                     return res.end(JSON.stringify({ error: 'Record not found' }));
                                 }
                                 console.log("Admin updated record id:", id, "to name:", name, "and description:", description);
+                                
+                                // NEW: Broadcast the updated pin data to WebSocket clients.
+                                global.broadcast.broadcastPinEdit(wss, { id, name, description });
+                                
                                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                                return res.end(JSON.stringify({ id, name, description }));
+                                return res.end(JSON.stringify(wss, { id, name, description }));
                             }
                         );
                     } else {
@@ -446,10 +457,14 @@ const server = http.createServer((req, res) => {
                                     res.writeHead(404, { 'Content-Type': 'application/json' });
                                     return res.end(JSON.stringify({ error: 'Record not found or not authorized' }));
                                 }
-                                // updating pin if user passes checks
                                 console.log("Updated record id:", id, "to name:", name, "and description:", description);
+                                
+                                // Broadcast the updated pin data to WebSocket clients.
+                                global.broadcast.broadcastPinEdit(wss, { id, name, description });
+                                
                                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                                return res.end(JSON.stringify({ id, name, description }));
+                                const updatedPinData = { id, name, description };
+                                return res.end(JSON.stringify(updatedPinData));
                             }
                         );
                     }
@@ -463,7 +478,7 @@ const server = http.createServer((req, res) => {
         return;
     }
 
-    // for deletin pins
+    // for deleting pins
     if (req.method === 'DELETE') {
         console.log("Handling DELETE request");
         let body = '';
@@ -513,6 +528,10 @@ const server = http.createServer((req, res) => {
                                     return res.end(JSON.stringify({ error: 'Record not found' }));
                                 }
                                 console.log("Admin deleted record with id:", id);
+                                
+                                // Broadcast the deletion of the pin to WebSocket clients.
+                                global.broadcast.broadcastPinDelete(wss,{ id });
+                                
                                 res.writeHead(200, { 'Content-Type': 'application/json' });
                                 return res.end(JSON.stringify({ message: 'Record deleted', id }));
                             }
@@ -535,8 +554,13 @@ const server = http.createServer((req, res) => {
                                     return res.end(JSON.stringify({ error: 'Record not found or not authorized' }));
                                 }
                                 console.log("Deleted record with id:", id);
+                                
+                                // NEW: Broadcast the deletion of the pin to WebSocket clients.
+                                global.broadcast.broadcastPinDelete(wss, { id });
+                                
+                                const pinDeletionData = { message: 'Record Deleted', id };
                                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                                return res.end(JSON.stringify({ message: 'Record deleted', id }));
+                                return res.end(JSON.stringify(pinDeletionData));
                             }
                         );
                     }
@@ -558,8 +582,8 @@ const server = http.createServer((req, res) => {
         res.end("Method not allowed");
     }
 });
-
- // firing up the server and letting the console know
-server.listen(port, '0.0.0.0', () => {
-    console.log(`API server listening on port ${port}`);
-});
+// created a separate file to handle my server startup
+module.exports = {
+    server,
+    connection
+};

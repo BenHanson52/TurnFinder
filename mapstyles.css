@@ -52,7 +52,7 @@ body {
     border-radius:3px;
     
   }
-  /* Adjust .modal-content for admin panel if you want it bigger */
+
   #adminPanelModal .modal-content {
     max-width: 600px;
   }

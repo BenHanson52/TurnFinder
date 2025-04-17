@@ -113,6 +113,40 @@
   <script src="https://unpkg.com/esri-leaflet"></script>
 
   <script>
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // connecting to my wS
+      const ws = new WebSocket('wss://summertimeskiingco.crabdance.com/api/');
+
+      // this is what sets up the WS to listen for pins
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
+
+        updatePins(data);
+      };
+      // Handle the connection open event
+      ws.onopen = () => {
+        console.log('WebSocket connection established.');
+      };
+
+      // Handle errors
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      // Handle connection closure
+      ws.onclose = () => {
+        console.log('WebSocket connection closed.');
+      };
+
+      // function to update pins via WS
+      function updatePins(pinData) {
+        console.log('Updating pins:', pinData);
+        loadPins();
+      }
+    });
+
     // shows admin panel button if user role is admin.
     const currentRole = localStorage.getItem('role');
     if (currentRole === 'admin') {
@@ -185,6 +219,7 @@
         const currentUsername = getCurrentUsername();
         const currentRole = getCurrentUserRole();
         data.forEach(pin => {
+          console.log("Fetched pin username:", pin.username);
           const latNum = parseFloat(pin.lat);
           const lngNum = parseFloat(pin.lng);
           const marker = L.marker([latNum, lngNum]);
@@ -194,11 +229,18 @@
           if (pin.imageUrl) {
             popupContent += `<img src="${pin.imageUrl}?t=${Date.now()}" width="120" alt="Pin Image"><br>`;
           }
+
+          // Display the username if provided.
+          if (pin.username) {
+            popupContent += `<p style="color:red; background-color:yellow;">User: ${encodeURIComponent(pin.username)}</p>`;
+          }
+
           // If the current user is the owner OR is an admin, add Edit and Delete buttons.
           if ((pin.username && pin.username === currentUsername) || currentRole === 'admin') {
-            popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>
+            popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>;
                              <button class="delete-pin" data-id="${pin.id}">Delete</button>`;
           }
+          console.log("Final popup content:", popupContent);
           marker.bindPopup(popupContent);
           pinsGroup.addLayer(marker);
         });
@@ -579,6 +621,12 @@
               currentUser = atob(authCreds).split(':')[0];
             }
             const currentRole = localStorage.getItem('role');
+
+            // Display the username
+            if (data.username) {
+              popupContent += `<p style="color: black; font-size: 14px;">User: ${data.username}</p>`;
+            }
+
             // If the logged-in user is the owner or is an admin, add buttons.
             if (data.username === currentUser || currentRole === 'admin') {
               popupContent += `
@@ -586,10 +634,12 @@
                 <button class="delete-pin" data-id="${data.id}">Delete</button>
               `;
             }
-            newMarker.bindPopup(popupContent).openPopup();
+
+            newMarker.setPopupContent(popupContent);
+            newMarker.openPopup();
             newMarker.submitted = true;
+
           } else {
-            
             pinsGroup.removeLayer(newMarker);
             alert("Submission failed. Please try again.");
           }
