@@ -7,6 +7,7 @@ node_modules/
 
 # Env files
 .env
+ecosystem.config.js
 
 # Build output
 dist/
@@ -18,3 +19,5 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+dev.crt
+dev.key
