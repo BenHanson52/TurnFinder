@@ -5,13 +5,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CO Summer Skiing</title>
-  <link rel="stylesheet" href="mapstyles.css">
   
   <!-- The link to leaflet's style sheet, the library that I'm using to render my map -->
   <link rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
         crossorigin="">
+  <link rel="stylesheet" href="mapstyles.css">
   <!-- Adding the browser-image-compression library so I can compress images on the front end
        and avoid having to deal with that stuff on my backend -->
   <script src="https://unpkg.com/browser-image-compression/dist/browser-image-compression.js"></script>
@@ -54,10 +54,10 @@
   <!-- Template for the pin form -->
   <template id="pinFormTemplate">
     <form id="pinForm" enctype="multipart/form-data">
-      <label for="name">Name:</label>
+      <label for="name">What'd you ski?</label>
       <input type="text" id="name" name="name" required>
       
-      <label for="description">Description:</label>
+      <label for="description">How were the conditions out there?</label>
       <textarea id="description" name="description"></textarea>
       
       <label for="image">Upload Image:</label>
@@ -113,10 +113,14 @@
   <script src="https://unpkg.com/esri-leaflet"></script>
 
   <script>
+        // Override Leaflet’s global popup defaults:
+    L.Popup.prototype.options.minWidth = 450;
+    L.Popup.prototype.options.maxWidth = 600;
 
     document.addEventListener('DOMContentLoaded', () => {
       // connecting to my wS
-      const ws = new WebSocket('wss://summertimeskiingco.crabdance.com/api/');
+      const protocol = (location.protocol === 'https:') ? 'wss' : 'ws';
+      const ws = new WebSocket(`${protocol}://${location.host}/api/`);
 
       // this is what sets up the WS to listen for pins
       ws.onmessage = (event) => {
@@ -227,27 +231,48 @@
           let popupContent = `<strong>${pin.name}</strong><br>
                               ${pin.description}<br>`;
           if (pin.imageUrl) {
-            popupContent += `<img src="${pin.imageUrl}?t=${Date.now()}" width="120" alt="Pin Image"><br>`;
+            popupContent += `<img src="${pin.imageUrl}?t=${Date.now()}" style="max-width:100%;height:auto;"><br>`;
           }
 
-          // Display the username if provided.
+          // Display the username and a nicely formatted timestamp
           if (pin.username) {
-            popupContent += `<p style="color:red; background-color:yellow;">User: ${encodeURIComponent(pin.username)}</p>`;
+            popupContent += `<p>User: ${encodeURIComponent(pin.username)}</p>`;
+
+            // 1) Parse the ISO timestamp from your API
+            const dateObj = new Date(pin.created_at);
+
+            // 2) Format it however you like
+            const formatted = dateObj.toLocaleString('en-US', {
+              dateStyle: 'short',   
+              timeStyle: 'short'   
+            });
+
+            popupContent += `<p>Last Edited: ${formatted}</p>`;
           }
 
           // If the current user is the owner OR is an admin, add Edit and Delete buttons.
           if ((pin.username && pin.username === currentUsername) || currentRole === 'admin') {
-            popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>;
+            popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>
                              <button class="delete-pin" data-id="${pin.id}">Delete</button>`;
           }
           console.log("Final popup content:", popupContent);
-          marker.bindPopup(popupContent);
+          marker.bindPopup(popupContent, {
+            className: "pin-view-popup",
+            minWidth: 300,
+            maxWidth: 400,
+            maxHeight: 350,      // if you still want an overall height cap
+            autoPan: true,
+            keepInView: true,
+            autoPanPadding: [30, 30]
+          });
+
           pinsGroup.addLayer(marker);
         });
       } catch (error) {
         console.error('Error fetching pins:', error);
       }
     }
+  
 
     // Check login state on page load.
     window.addEventListener('DOMContentLoaded', function() {
@@ -495,6 +520,32 @@
         attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
       }
     );
+    const county_layer = L.esri.featureLayer({
+      url: 'https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_Census_Counties/FeatureServer/0', 
+      style: {
+        color: '#a3121c',    // boundary color
+        weight: 1.5,      // line thickness
+        fillOpacity: 0    // no fill
+      }
+    });
+
+    const avy_paths = L.esri.featureLayer({
+      url: 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/Backcountry_AVPaths/FeatureServer/2', 
+      style: {
+        color: '#97f0ee',    // boundary color
+        weight: 1,      // line thickness
+        fillOpacity: 0.4    // needs fill
+      }
+    });
+    
+    const ski_areas = L.esri.featureLayer({
+      url: 'https://services1.arcgis.com/0MSEUqKaxRlEPj5g/arcgis/rest/services/CO_Ski_Area_Boundaries/FeatureServer/2', 
+      style: {
+        color: '#d6cd51',    // boundary color
+        weight: 1,      // line thickness
+        fillOpacity: 0.4    // needs fill
+      }
+    });
     //initializing my map with the combined satellite imagery and topography
     map.addLayer(USGS_USImageryTopo);
 
@@ -572,10 +623,7 @@
           } catch (compressionError) {
             console.error("Error compressing image:", compressionError);
           }
-        } else if (fileInput) {
-          // if no image was uploaded, this removes the file input.
-          fileInput.parentNode.removeChild(fileInput);
-        }
+        } 
 
         // creating formdata from the userpin form so that
         // my backend can process it
@@ -585,8 +633,8 @@
         // Add the Authorization header for pin creation using stored credentials.
         const authCredentials = localStorage.getItem('authCredentials');
         let headers = {};
-        if (authCredentials) {
-          headers['Authorization'] = 'Basic ' + authCredentials;
+        if (localStorage.getItem('authCredentials')) {
+          headers['Authorization'] = 'Basic ' + localStorage.getItem('authCredentials');
         }
         
         //wrapped in a try block as this was a major source of bugs
@@ -594,13 +642,20 @@
         try {
           const response = await fetch('/api/endpoint', {
             method: 'POST',
-            headers: headers,
+            headers,
             body: formData
           });
 
+          if (!response.ok) {
+            const err = await response.json();
+            alert(err.error || 'You’ve hit your pin limit for today.');
+            return;
+          }
+
           const data = await response.json();
           console.log("Received data:", data);
-
+          
+          
           //checking that the data is associated with an id
           //if it is, we render the pop up with the image included
           // ?t=${Date.now()} is a 'cache-busting' technique that ensures
@@ -611,8 +666,20 @@
               <strong>${data.name}</strong><br>
               ${data.description}<br>
             `;
+
+            const raw = data.created_at;              
+            const iso = decodeURIComponent(raw); 
+            const dateObj = new Date(iso);
+            
+            const formatted = dateObj.toLocaleString('en-US', {
+              dateStyle:  'medium',   // e.g. “Apr 18, 2025”
+              timeStyle:  'short'     // e.g. “12:42 AM”
+            });
+
+            popupContent += `<p>Last Edited: ${formatted}</p>`;
+
             if (data.imageUrl) {
-              popupContent += `<img src="${data.imageUrl}?t=${Date.now()}" width="120" alt="Pin Image"><br>`;
+              popupContent += `<img src="${data.imageUrl}?t=${Date.now()}" style="max-width:100%; height:auto;"><br>`;
             }
             // Determine current user and role
             const authCreds = localStorage.getItem('authCredentials');
@@ -624,14 +691,16 @@
 
             // Display the username
             if (data.username) {
-              popupContent += `<p style="color: black; font-size: 14px;">User: ${data.username}</p>`;
+              popupContent += `<p style="color: black; font-size: 16px;">User: ${data.username}</p>`;
             }
 
             // If the logged-in user is the owner or is an admin, add buttons.
             if (data.username === currentUser || currentRole === 'admin') {
               popupContent += `
+              <div class="pin-actions">
                 <button class="edit-pin" data-id="${data.id}" data-name="${encodeURIComponent(data.name)}" data-description="${encodeURIComponent(data.description)}">Edit</button>
                 <button class="delete-pin" data-id="${data.id}">Delete</button>
+              </div>
               `;
             }
 
@@ -662,9 +731,16 @@
       }
       
       //this attaches the popup to the cloned form (the userpin form the user fills out)
-      newMarker.bindPopup(formClone, { maxWidth: 300 }).openPopup();
+      newMarker.bindPopup(formClone, {
+        minWidth: 300,          // at least 300px wide
+        maxWidth: 400,          // but no more than 400px
+        maxHeight: 350,         // cap height (will scroll if content overflows)
+        autoPan: true,          // pan map when popup opens
+        keepInView: true,       // ensure the whole popup stays in view
+        autoPanPadding: [30,30] // leave a 30px buffer from each map edge
+      })
+      .openPopup();
     });
-
     // the links to CO's ArcGIS stuff for rendering overlays
     // there wasn't one federal land overlay so I combined all of them
     // I may want to revisit this.
@@ -715,7 +791,10 @@
     //menu for my overlays
     const overlayLayers = {
       "Federal Land": fedLandLayer,
-      "COTREX Trailheads": trailheads
+      "COTREX Trailheads": trailheads,
+      "Counties": county_layer,
+      "Known Avy Paths": avy_paths,
+      "Ski Area Boundaries": ski_areas
     };
     //the actual control panel that handles base layers and overlays.
     L.control.layers(baseLayers, overlayLayers).addTo(map);
