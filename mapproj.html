@@ -113,9 +113,89 @@
   <script src="https://unpkg.com/esri-leaflet"></script>
 
   <script>
-        // Override Leaflet’s global popup defaults:
+
+  // initializing the map
+  const map = L.map('map', {
+    center: [39.7983, -105.7778],  
+    zoom:   8                    
+  });
+
+  //geolocation api logic
+  if (!("geolocation" in navigator)) {
+    alert("Geolocation not supported by your browser.");
+    // fallback: maybe center on a default lat/lng
+  } else {
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+      enableHighAccuracy: true,
+      timeout: 10_000,  
+      maximumAge: 0        // no cached positions
+    });
+  }
+
+  function onSuccess(position) {
+    const { latitude, longitude } = position.coords;
+    
+    map.setView([ latitude, longitude ], 13);
+    
+    L.circle([ latitude, longitude ], {
+      color:       'blue',    
+      fillColor:   'blue',    
+      fillOpacity: 0.3,       
+      radius:      25         // radius in meters
+    })
+    .addTo(map)
+    .bringToFront()          
+    .myLocation = true;     
+  }
+
+  function onError(err) {
+    console.warn(`Geolocation error (${err.code}): ${err.message}`);
+
+    
+    let msg;
+    switch (err.code) {
+      case err.PERMISSION_DENIED:
+        msg = "Location permission was denied. Showing default view.";
+        break;
+      case err.POSITION_UNAVAILABLE:
+        msg = "Position unavailable. Showing default view.";
+        break;
+      case err.TIMEOUT:
+        msg = "Location request timed out. Showing default view.";
+        break;
+      default:
+        msg = "An unknown geolocation error occurred. Showing default view.";
+    }
+    alert(msg);
+
+    const defaultLatLng = [39.7983, -105.7778]; 
+    map.setView(defaultLatLng, 8);
+
+  }
+    // overriding Leaflet’s global popup defaults:
     L.Popup.prototype.options.minWidth = 450;
     L.Popup.prototype.options.maxWidth = 600;
+
+    // logic for sharing a pin
+    document.addEventListener('click', async e => {
+      if (e.target.matches('.share-pin')) {
+        const lat = e.target.dataset.lat;
+        const lng = e.target.dataset.lng;
+        const shareUrl = `${location.origin}${location.pathname}?lat=${lat}&lng=${lng}`;
+
+        try {
+          await navigator.share({
+            title: "SummertimeSkiingCO Pin",
+            text: "Check out these conditions:",
+            url: shareUrl
+          });
+          console.log("Shared successfully");
+        } catch (err) {
+          console.warn("Share failed:", err);
+        }
+      }
+    });
+
 
     document.addEventListener('DOMContentLoaded', () => {
       // connecting to my wS
@@ -195,10 +275,7 @@
     document.getElementById('closeAdminPanel').addEventListener('click', function() {
       document.getElementById('adminPanelModal').classList.add('hidden');
     });
-
-    // initializing the map, centered on Berthoud Pass
-    // Must define map before referencing it anywhere else.
-    const map = L.map('map').setView([39.7983, -105.7778], 8.5);
+    
 
     const pinsGroup = L.layerGroup().addTo(map);
 
@@ -214,6 +291,7 @@
 
     // Function to load pins dynamically via AJAX.
     async function loadPins() {
+
       try {
         const response = await fetch('/api/endpoint');
         const data = await response.json();
@@ -250,6 +328,10 @@
             popupContent += `<p>Last Edited: ${formatted}</p>`;
           }
 
+          if (canShare) {
+            popupContent += `<button class="share-pin" data-lat="${latNum}" data-lng="${lngNum}">Share</button>`;
+          }
+          
           // If the current user is the owner OR is an admin, add Edit and Delete buttons.
           if ((pin.username && pin.username === currentUsername) || currentRole === 'admin') {
             popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>
@@ -502,21 +584,18 @@
     const USGS_USTopo = L.tileLayer(
       'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
       {
-        maxZoom: 25,
         attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
       }
     );
     const USGS_USImageryTopo = L.tileLayer(
       'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}',
       {
-        maxZoom: 25,
         attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
       }
     );
     const USGS_sat = L.tileLayer(
       'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
       {
-        maxZoom: 25,
         attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
       }
     );
@@ -798,6 +877,15 @@
     };
     //the actual control panel that handles base layers and overlays.
     L.control.layers(baseLayers, overlayLayers).addTo(map);
+
+  // web sharing api logic
+  const canShare = !!navigator.share;
+
+  const params = new URLSearchParams(location.search);
+
+  if (params.has('lat') && params.has('lng')) {
+    map.setView([ +params.get('lat'), +params.get('lng') ], 13);
+  }
   </script>
 </body>
 </html>

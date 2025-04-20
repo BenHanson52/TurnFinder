@@ -3,18 +3,15 @@
 // ended up using mariadb on my server instead,
 // but this still works, same creators as mysql
 const mysql = require('mysql2');
-// having env var issues, commenting this out for now require('dotenv').config(); 
+ 
 const bcrypt = require('bcrypt');
 
 const url = require('url');
-require('dotenv').config();
+
+// need to require http for dev env
+const http  = require('http');
 const https = require('https');
 const fs = require('fs');
-
-const options = {
-    key: fs.readFileSync(process.env.SSL_KEY_PATH),
-    cert: fs.readFileSync(process.env.SSL_CERT_PATH)
-  };
 
 console.log("DB_HOST:", process.env.DB_HOST);
 console.log("DB_USER:", process.env.DB_USER);
@@ -74,7 +71,7 @@ function getUserRole(username, callback) {
 }
 
 //creating the server
-const server = https.createServer(options, (req, res) => {
+function requestHandler(req, res) {
     const parsedUrl = url.parse(req.url, true);
     console.log("Requested path:", parsedUrl.pathname);
     console.log("HTTP method:", req.method);
@@ -268,7 +265,7 @@ const server = https.createServer(options, (req, res) => {
         });
 
         //debugging stuff
-        form.parse(req, (err, fields, files) => {
+        form.parse(req, async(err, fields, files) => {
             console.log("Form parsed. fields:", fields);
             console.log("files:", files);
 
@@ -278,6 +275,25 @@ const server = https.createServer(options, (req, res) => {
                 return res.end(JSON.stringify({
                     error: 'Error parsing the form data',
                     details: err.message
+                }));
+            }
+
+            // pin‑limit: max 6 pins per user per day ——
+            const [rows] = await connection
+                .promise()
+                .query(
+                    `SELECT COUNT(*) AS cnt
+                    FROM pins
+                    WHERE username = ?
+                        AND created_at >= CURRENT_DATE()`,
+                    [loggedInUsername]
+            );
+
+            const MAX_PINS_PER_DAY = 4;
+            if (rows[0].cnt >= MAX_PINS_PER_DAY) {
+                res.writeHead(429, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({
+                    error: `Daily pin limit of ${MAX_PINS_PER_DAY} reached`
                 }));
             }
 
@@ -302,6 +318,10 @@ const server = https.createServer(options, (req, res) => {
             if (Array.isArray(lngVal)) {
                 lngVal = lngVal[0];
             }
+            
+            // I don't need to massage my created_at var for formidable
+            // since it isnt coming in from the user form
+            const created_at = new Date()
             
             // same array deal with my images, I have to turn them from arrays into files
             // grabs the first element if it's an array, I'll need to change this to allow 
@@ -342,13 +362,15 @@ const server = https.createServer(options, (req, res) => {
                 "img =", imagePath,
                 "lat =", latVal,
                 "lng =", lngVal,
-                "username =", loggedInUsername);
+                "username =", loggedInUsername,
+                "created_at =", created_at
+            );
 
             // inserting a new record into my mariadb database.
             // Note: The pins table should include a column (e.g., username) to track the owner.
             connection.query(
-            'INSERT INTO pins (name, description, imageUrl, lat, lng, username) VALUES (?, ?, ?, ?, ?, ?)',
-            [nameVal, descVal || "", imagePath, latVal || null, lngVal || null, loggedInUsername],
+            'INSERT INTO pins (name, description, imageUrl, lat, lng, username, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [nameVal, descVal || "", imagePath, latVal || null, lngVal || null, loggedInUsername, created_at],
             (err, result) => {
                 if (err) {
                     console.error("Database error on INSERT:", err);
@@ -365,7 +387,8 @@ const server = https.createServer(options, (req, res) => {
                     imageUrl: imagePath,
                     lat: latVal,
                     lng: lngVal,
-                    username: loggedInUsername
+                    username: loggedInUsername,
+                    created_at: created_at
                 };
 
                 // NEW: Broadcast the new pin to WebSocket clients.
@@ -581,9 +604,9 @@ const server = https.createServer(options, (req, res) => {
         res.writeHead(405, { 'Content-Type': 'text/plain' });
         res.end("Method not allowed");
     }
-});
+};
 // created a separate file to handle my server startup
 module.exports = {
-    server,
+    requestHandler,
     connection
 };

@@ -1,7 +1,23 @@
 // mapproj_server.js
-const { server } = require('./mapproj_API');
+const fs        = require('fs');
+const http      = require('http');
+const https     = require('https');
+const { requestHandler } = require('./mapproj_API');
 const WebSocket = require('ws');
-const port = 3000;
+
+const isDev = process.env.NODE_ENV === 'development';
+const PORT  = process.env.PORT || 3000;
+
+let server;
+if (isDev) {
+  server = http.createServer(requestHandler);
+} else {
+  const options = {
+    key:  fs.readFileSync(process.env.SSL_KEY_PATH),
+    cert: fs.readFileSync(process.env.SSL_CERT_PATH),
+  };
+  server = https.createServer(options, requestHandler);
+}
 
 // Create the WebSocket server
 const wss = new WebSocket.Server({ server });
@@ -60,6 +76,6 @@ wss.on('connection', (ws) => {
 });
 
 // Start the HTTP server (which now handles both API and WS)
-server.listen(port, '0.0.0.0', () => {
-  console.log(`Server running on port ${port} with HTTP and WebSocket support.`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`${isDev ? 'HTTP' : 'HTTPS'} server listening on port ${PORT}`);
 });
