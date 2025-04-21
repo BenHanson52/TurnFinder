@@ -120,11 +120,18 @@
     zoom:   8                    
   });
 
+  const params     = new URLSearchParams(location.search);
+  const sharedLat  = params.get('lat');
+  const sharedLng  = params.get('lng');
   //geolocation api logic
   if (!("geolocation" in navigator)) {
     alert("Geolocation not supported by your browser.");
-    // fallback: maybe center on a default lat/lng
-  } else {
+    map.setView([39.7983, -105.7778], 10);
+  } 
+  else if (sharedLat && sharedLng) {
+    map.setView([ +sharedLat, +sharedLng ], 13);
+  }
+  else {
     navigator.geolocation.getCurrentPosition(onSuccess, onError, {
       enableHighAccuracy: true,
       timeout: 10_000,  
@@ -196,41 +203,6 @@
       }
     });
 
-
-    document.addEventListener('DOMContentLoaded', () => {
-      // connecting to my wS
-      const protocol = (location.protocol === 'https:') ? 'wss' : 'ws';
-      const ws = new WebSocket(`${protocol}://${location.host}/api/`);
-
-      // this is what sets up the WS to listen for pins
-      ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        console.log('Received WebSocket message:', data);
-
-        updatePins(data);
-      };
-      // Handle the connection open event
-      ws.onopen = () => {
-        console.log('WebSocket connection established.');
-      };
-
-      // Handle errors
-      ws.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-
-      // Handle connection closure
-      ws.onclose = () => {
-        console.log('WebSocket connection closed.');
-      };
-
-      // function to update pins via WS
-      function updatePins(pinData) {
-        console.log('Updating pins:', pinData);
-        loadPins();
-      }
-    });
-
     // shows admin panel button if user role is admin.
     const currentRole = localStorage.getItem('role');
     if (currentRole === 'admin') {
@@ -291,7 +263,6 @@
 
     // Function to load pins dynamically via AJAX.
     async function loadPins() {
-
       try {
         const response = await fetch('/api/endpoint');
         const data = await response.json();
@@ -301,69 +272,97 @@
         const currentUsername = getCurrentUsername();
         const currentRole = getCurrentUserRole();
         data.forEach(pin => {
-          console.log("Fetched pin username:", pin.username);
           const latNum = parseFloat(pin.lat);
           const lngNum = parseFloat(pin.lng);
-          const marker = L.marker([latNum, lngNum]);
-          // Build basic popup content.
-          let popupContent = `<strong>${pin.name}</strong><br>
-                              ${pin.description}<br>`;
+
+          // 1) Build your popupContent before creating the marker
+          let popupContent = `<strong>${pin.name}</strong><br>${pin.description}<br>`;
           if (pin.imageUrl) {
             popupContent += `<img src="${pin.imageUrl}?t=${Date.now()}" style="max-width:100%;height:auto;"><br>`;
           }
-
-          // Display the username and a nicely formatted timestamp
           if (pin.username) {
-            popupContent += `<p>User: ${encodeURIComponent(pin.username)}</p>`;
+            const formatted = new Date(pin.created_at)
+              .toLocaleString('en-US',{ dateStyle:'short', timeStyle:'short' });
+            popupContent += `<p>User: ${pin.username}</p><p>Last Edited: ${formatted}</p>`;
+          }
+          if (canShare) {
+            popupContent += `<button class="share-pin" data-lat="${latNum}" data-lng="${lngNum}">Share</button><br>`;
+          }
+          if ((pin.username === currentUsername) || currentRole === 'admin') {
+            popupContent += `
+              <button class="edit-pin"   data-id="${pin.id}">Edit</button>
+              <button class="delete-pin" data-id="${pin.id}">Delete</button>`;
+          }
 
-            // 1) Parse the ISO timestamp from your API
-            const dateObj = new Date(pin.created_at);
-
-            // 2) Format it however you like
-            const formatted = dateObj.toLocaleString('en-US', {
-              dateStyle: 'short',   
-              timeStyle: 'short'   
+          // 2) Now create & bind the marker _with_ that content
+          const marker = L.marker([latNum, lngNum])
+            .bindPopup(popupContent, {
+              className:   "pin-view-popup",
+              minWidth:    300,
+              maxWidth:    400,
+              maxHeight:   400,
+              autoPan:     true,
+              keepInView:  true,
+              autoPanPadding: [30, 30]
             });
 
-            popupContent += `<p>Last Edited: ${formatted}</p>`;
-          }
-
-          if (canShare) {
-            popupContent += `<button class="share-pin" data-lat="${latNum}" data-lng="${lngNum}">Share</button>`;
-          }
-          
-          // If the current user is the owner OR is an admin, add Edit and Delete buttons.
-          if ((pin.username && pin.username === currentUsername) || currentRole === 'admin') {
-            popupContent += `<button class="edit-pin" data-id="${pin.id}" data-name="${encodeURIComponent(pin.name)}" data-description="${encodeURIComponent(pin.description)}">Edit</button>
-                             <button class="delete-pin" data-id="${pin.id}">Delete</button>`;
-          }
-          console.log("Final popup content:", popupContent);
-          marker.bindPopup(popupContent, {
-            className: "pin-view-popup",
-            minWidth: 300,
-            maxWidth: 400,
-            maxHeight: 350,      // if you still want an overall height cap
-            autoPan: true,
-            keepInView: true,
-            autoPanPadding: [30, 30]
-          });
-
+          // 3) Add the marker to the map or layerGroup
           pinsGroup.addLayer(marker);
+
+          // 4) Finally, if this matches your sharedLat/sharedLng, open it
+          if (
+            !isNaN(sharedLat) &&
+            !isNaN(sharedLng) &&
+            Math.abs(sharedLat - latNum) < 1e-6 &&
+            Math.abs(sharedLng - lngNum) < 1e-6
+          ) {
+            map.setView([latNum, lngNum], 10);
+            marker.openPopup();
+          }
         });
+
       } catch (error) {
         console.error('Error fetching pins:', error);
       }
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // connecting to my wS
+      const protocol = (location.protocol === 'https:') ? 'wss' : 'ws';
+      const ws = new WebSocket(`${protocol}://${location.host}/api/`);
+
+      // this is what sets up the WS to listen for pins
+      ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
+
+        updatePins(data);
+      };
+      // Handle the connection open event
+      ws.onopen = () => {
+        console.log('WebSocket connection established.');
+      };
+
+      // Handle errors
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+
+      // Handle connection closure
+      ws.onclose = () => {
+        console.log('WebSocket connection closed.');
+      };
+
+      // function to update pins via WS
+      function updatePins(pinData) {
+        console.log('Updating pins:', pinData);
+        loadPins();
+      }
+    });
   
 
-    // Check login state on page load.
+    // now loads pins regardless of being logged in
     window.addEventListener('DOMContentLoaded', function() {
-      const isLoggedIn = localStorage.getItem('loggedIn');
-      if (!isLoggedIn) {
-        // Show the login modal if not logged in.
-        document.getElementById('loginModal').style.display = 'flex';
-      }
-      // Initially load pins.
       loadPins();
     });
 
@@ -668,6 +667,11 @@
         ev.preventDefault(); // Prevent native submission.
         console.log("Form submit event fired!");
 
+        if (!localStorage.getItem('loggedIn')) {
+          document.getElementById('loginModal').style.display = 'flex';
+          return;
+        }
+
         // this grabs the image file's 'name'
         const fileInput = userPin.querySelector('input[name="image"]');
         
@@ -880,12 +884,6 @@
 
   // web sharing api logic
   const canShare = !!navigator.share;
-
-  const params = new URLSearchParams(location.search);
-
-  if (params.has('lat') && params.has('lng')) {
-    map.setView([ +params.get('lat'), +params.get('lng') ], 13);
-  }
   </script>
 </body>
 </html>
