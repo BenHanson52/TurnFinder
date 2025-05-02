@@ -63,9 +63,9 @@ body {
     justify-content: center;
     align-items: center;
     margin: auto;
-    height: 65vh;
+    height: 80vh;
     box-sizing: border-box;
-    width: 65%;
+    width: 80%;
   }
   
   /* Tagline styling */
@@ -103,6 +103,35 @@ body {
     padding: 5px 10px;
     font-size: 1em;
     cursor: pointer;
+  }
+
+  /* image carousel */
+
+  .carousel {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  
+  .carousel button {
+    background: #fff;
+    border: 1px solid #888;
+    cursor: pointer;
+    padding: 2px 6px;
+    font-size: 14px;
+  }
+  
+  .car-images {
+    max-width: 95%;        /* constrain width inside popup */
+    max-height: auto;       /* constrain height */
+    overflow: hidden;
+    display: flex;
+  }
+  
+  .car-img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
   }
   
   /* Footer styling */

@@ -5,7 +5,7 @@
 const mysql = require('mysql2');
  
 const bcrypt = require('bcrypt');
-
+const path = require('path')
 const url = require('url');
 
 // need to require http for dev env
@@ -218,9 +218,24 @@ function requestHandler(req, res) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ error: 'Record not found' }));
                 }
+
+                // ★ NEW: parse imageUrl JSON string -> array
+                const pin = results[0];
+                let imgs = [];
+                try {
+                    imgs = JSON.parse(pin.imageUrl);
+                } catch {
+                    if (pin.imageUrl) imgs = [pin.imageUrl];
+                }
+
+                const responseObject = {
+                    ...pin,
+                    imageUrls: imgs // front‑end will loop this array
+                };
+
                 console.log("Returning record:", results[0]);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(results[0]));
+                res.end(JSON.stringify(responseObject));
             });
         } else {
             connection.query('SELECT * FROM pins', (err, results) => {
@@ -229,11 +244,24 @@ function requestHandler(req, res) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ error: 'Database error' }));
                 }
+                // transform every row so imageUrl becomes imageUrls array
+                const output = results.map(pin => {
+                    let imgs = [];
+                    try {
+                        imgs = JSON.parse(pin.imageUrl);
+                    } catch {
+                        if (pin.imageUrl) imgs = [pin.imageUrl];
+                    }
+                    return {
+                        ...pin,
+                        imageUrls: imgs
+                    };
+                });
                 //this returns the entirety of my userpin table in my mapproj database
                 // for rendering the pins on the map when a user first visits the site
-                console.log("Returning all records:", results.length, "rows.");
+                console.log("Returning all records:", output.length, "rows.");
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify(results));
+                res.end(JSON.stringify(output));
             });
         }
         return;
@@ -259,7 +287,7 @@ function requestHandler(req, res) {
         const form = formidable({
             uploadDir: 'uploads',
             keepExtensions: true,
-            multiples: false,
+            multiples: true,
             allowEmptyFiles: true,
             minFileSize: 0
         });
@@ -326,16 +354,15 @@ function requestHandler(req, res) {
             // same array deal with my images, I have to turn them from arrays into files
             // grabs the first element if it's an array, I'll need to change this to allow 
             // users to upload multiple photos.
-            let imageObj = null;
+            let imageObjs = [];
             if (files.image) {
-                imageObj = Array.isArray(files.image) ? files.image[0] : files.image;
+                imageObjs = Array.isArray(files.image) ? files.image : [files.image];
             }
 
             // if the image is valid, this grabs the filepath so it can be served
-            let imagePath = '';
-            if (imageObj && imageObj.filepath) {
-                imagePath = imageObj.filepath;
-            }
+            let imagePaths = imageObjs
+                .filter(img => img.filepath)
+                .map(img => '/uploads/' + path.basename(img.filepath));
 
             // ensuring lat/lng are numeric data types
             latVal = parseFloat(latVal);
@@ -347,19 +374,11 @@ function requestHandler(req, res) {
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ error: 'Missing parameter: name' }));
             }
-
-            const path = require('path');
-            //this creates the imagepath that my server will use to 
-            // serve images to users
-            if (imageObj && imageObj.filepath) {
-                const baseName = path.basename(imageObj.filepath);  
-                imagePath = '/uploads/' + baseName;
-            }
             
             //debugging stuff
             console.log("Inserting into database: name =", nameVal,
                 "desc =", descVal,
-                "img =", imagePath,
+                "img =", imagePaths,
                 "lat =", latVal,
                 "lng =", lngVal,
                 "username =", loggedInUsername,
@@ -370,7 +389,7 @@ function requestHandler(req, res) {
             // Note: The pins table should include a column (e.g., username) to track the owner.
             connection.query(
             'INSERT INTO pins (name, description, imageUrl, lat, lng, username, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [nameVal, descVal || "", imagePath, latVal || null, lngVal || null, loggedInUsername, created_at],
+            [nameVal, descVal || "", JSON.stringify(imagePaths), latVal || null, lngVal || null, loggedInUsername, created_at],
             (err, result) => {
                 if (err) {
                     console.error("Database error on INSERT:", err);
@@ -384,7 +403,7 @@ function requestHandler(req, res) {
                     id: result.insertId,
                     name: nameVal,
                     description: descVal,
-                    imageUrl: imagePath,
+                    imageUrls: imagePaths,
                     lat: latVal,
                     lng: lngVal,
                     username: loggedInUsername,
