@@ -23,6 +23,19 @@ const connection = mysql.createConnection({
     password: process.env.DB_PASSWORD,
     database: process.env.DB_NAME
 });
+// checking the connection w my database
+connection.query(
+    'SELECT @@hostname   AS host,' +
+    '       DATABASE()    AS db ,' +
+    '       @@port        AS port',
+    (err, rows) => {
+      if (err) {
+        console.error('DB probe failed:', err);
+      } else {
+        console.log('*** API connected to:', rows[0]); // ← watch this
+      }
+    }
+  );
 
 async function createUser(username, plaintextPassword, role) {
     try {
@@ -99,7 +112,6 @@ function requestHandler(req, res) {
               if (err || results.length === 0) {
                 res.writeHead(401, { 
                   'Content-Type': 'application/json',
-                  'WWW-Authenticate': 'Basic realm="Mapproj"'
                 });
                 return res.end(JSON.stringify({ error: 'Invalid credentials' }));
               }
@@ -109,7 +121,6 @@ function requestHandler(req, res) {
                 if (err || !valid) {
                   res.writeHead(401, { 
                     'Content-Type': 'application/json',
-                    'WWW-Authenticate': 'Basic realm="Mapproj"'
                   });
                   return res.end(JSON.stringify({ error: 'Invalid credentials' }));
                 }
@@ -167,7 +178,6 @@ function requestHandler(req, res) {
         if (!username) {
             res.writeHead(401, {
                 'Content-Type': 'application/json',
-                'WWW-Authenticate': 'Basic realm="Mapproj"'
             });
             return res.end(JSON.stringify({ error: 'Missing credentials' }));
         }
@@ -219,19 +229,9 @@ function requestHandler(req, res) {
                     return res.end(JSON.stringify({ error: 'Record not found' }));
                 }
 
-                // ★ NEW: parse imageUrl JSON string -> array
                 const pin = results[0];
-                let imgs = [];
-                try {
-                    imgs = JSON.parse(pin.imageUrl);
-                } catch {
-                    if (pin.imageUrl) imgs = [pin.imageUrl];
-                }
-
-                const responseObject = {
-                    ...pin,
-                    imageUrls: imgs // front‑end will loop this array
-                };
+                pin.imageUrls = JSON.parse(pin.imageUrls || '[]');
+                const responseObject = pin;
 
                 console.log("Returning record:", results[0]);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -244,19 +244,18 @@ function requestHandler(req, res) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ error: 'Database error' }));
                 }
-                // transform every row so imageUrl becomes imageUrls array
-                const output = results.map(pin => {
-                    let imgs = [];
-                    try {
-                        imgs = JSON.parse(pin.imageUrl);
-                    } catch {
-                        if (pin.imageUrl) imgs = [pin.imageUrl];
-                    }
-                    return {
-                        ...pin,
-                        imageUrls: imgs
-                    };
-                });
+                // --- build response: ensure we always send imageUrls as real array ----
+                const output = results.map(pin => ({
+                    ...pin,
+                    imageUrls: (() => {
+                        try {
+                            return JSON.parse(pin.imageUrls || '[]');
+                        } catch {
+                            return [];
+                        }
+                    })()
+                }));
+
                 //this returns the entirety of my userpin table in my mapproj database
                 // for rendering the pins on the map when a user first visits the site
                 console.log("Returning all records:", output.length, "rows.");
@@ -277,7 +276,6 @@ function requestHandler(req, res) {
         if (!loggedInUsername) {
             res.writeHead(401, { 
               'Content-Type': 'application/json',
-              'WWW-Authenticate': 'Basic realm="Mapproj"'
             });
             return res.end(JSON.stringify({ error: 'Authentication required for creating pins' }));
         }
@@ -388,8 +386,8 @@ function requestHandler(req, res) {
             // inserting a new record into my mariadb database.
             // Note: The pins table should include a column (e.g., username) to track the owner.
             connection.query(
-            'INSERT INTO pins (name, description, imageUrl, lat, lng, username, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            [nameVal, descVal || "", JSON.stringify(imagePaths), latVal || null, lngVal || null, loggedInUsername, created_at],
+            'INSERT INTO pins (name, description, lat, lng, username, created_at, imageUrls) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [nameVal, descVal || "", latVal || null, lngVal || null, loggedInUsername, created_at, JSON.stringify(imagePaths)],
             (err, result) => {
                 if (err) {
                     console.error("Database error on INSERT:", err);
@@ -403,11 +401,11 @@ function requestHandler(req, res) {
                     id: result.insertId,
                     name: nameVal,
                     description: descVal,
-                    imageUrls: imagePaths,
                     lat: latVal,
                     lng: lngVal,
                     username: loggedInUsername,
-                    created_at: created_at
+                    created_at: created_at,
+                    imageUrls: imagePaths
                 };
 
                 // NEW: Broadcast the new pin to WebSocket clients.
@@ -446,7 +444,6 @@ function requestHandler(req, res) {
                 if (!loggedInUsername) {
                     res.writeHead(401, { 
                       'Content-Type': 'application/json',
-                      'WWW-Authenticate': 'Basic realm="Mapproj"'
                     });
                     return res.end(JSON.stringify({ error: 'Authentication required for updating pins' }));
                 }
@@ -542,7 +539,6 @@ function requestHandler(req, res) {
                 if (!loggedInUsername) {
                     res.writeHead(401, { 
                       'Content-Type': 'application/json',
-                      'WWW-Authenticate': 'Basic realm="Mapproj"'
                     });
                     return res.end(JSON.stringify({ error: 'Authentication required for deleting pins' }));
                 }

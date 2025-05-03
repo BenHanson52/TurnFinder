@@ -8,11 +8,26 @@ body {
     font-family: Arial, sans-serif;
   }
   
-  /* Hide elements by default */
-  .hidden {
-    display: none;
+  #authBar{
+    position: fixed;         
+    top: 0.75rem;
+    right: 1rem;
+    display: flex;
+    gap: .5rem;
+    z-index: 9999;            /* places it at the top */
   }
   
+  #authBar button{
+    padding:.4rem .8rem;
+    border-radius:4px;
+    border:none;
+    background: #e6ebe7;
+    color: #151716;
+    cursor: pointer;
+    font: 600 0.9rem/1 Roboto, sans-serif;
+  }
+  
+  #authBar button:hover{ background:#005fd1; }
   /* Login Modal */
   #loginModal {
     position: fixed;
@@ -23,6 +38,20 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 1000;
+  }
+
+  #userGreeting {
+    background: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border:rgba(0, 0, 0, 0.5);
+    padding:          8px 14px;
+    border-radius:    6px;
+  }
+  /* Hide elements by default */
+  .hidden {
+    display: none !important;
   }
   
   /* Admin Panel Modal */

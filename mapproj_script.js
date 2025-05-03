@@ -1,7 +1,4 @@
-
-// Hide the modal.
-document.getElementById('loginModal').style.display = 'none';
-
+// mapproj_script.js
 // initializing the map
 const map = L.map('map', {
 center: [39.7983, -105.7778],  
@@ -24,55 +21,80 @@ const sharedLat  = params.get('lat');
 const sharedLng  = params.get('lng');
 //geolocation api logic
 if (!("geolocation" in navigator)) {
-alert("Geolocation not supported by your browser.");
-map.setView([39.7983, -105.7778], 10);
+    alert("Geolocation not supported by your browser.");
+    map.setView([39.7983, -105.7778], 10);
 } 
 else if (sharedLat && sharedLng) {
-map.setView([ +sharedLat, +sharedLng ], 13);
+    map.setView([ +sharedLat, +sharedLng ], 13);
 }
 else {
-navigator.geolocation.getCurrentPosition(onSuccess, onError, {
-    enableHighAccuracy: true,
-    timeout: 10_000,  
-    maximumAge: 0        // no cached positions
-});
+    navigator.geolocation.getCurrentPosition(onSuccess, onError, {
+        enableHighAccuracy: true,
+        timeout: 10_000,  
+        maximumAge: 0        // no cached positions
+    });
 }
 
 function onSuccess(position) {
-const { latitude, longitude } = position.coords;
+    const { latitude, longitude } = position.coords;
 
-map.setView([ latitude, longitude ], 13);
+    map.setView([ latitude, longitude ], 13);
 
-L.circle([ latitude, longitude ], {
-    color:       'blue',    
-    fillColor:   'blue',    
-    fillOpacity: 0.3,       
-    radius:      40         // radius in meters
+    L.circle([ latitude, longitude ], {
+        color:       'blue',    
+        fillColor:   'blue',    
+        fillOpacity: 0.3,       
+        radius:      40         // radius in meters
 })
 .addTo(map)
 .bringToFront()          
 .myLocation = true;     
 }
 
+// geolocation error handling
 function onError(err) {
-console.warn(`Geolocation error (${err.code}): ${err.message}`);
-let msg;
-switch (err.code) {
-    case err.PERMISSION_DENIED:
-    msg = "Location permission was denied. Showing default view.";
-    break;
-    case err.POSITION_UNAVAILABLE:
-    msg = "Position unavailable. Showing default view.";
-    break;
-    case err.TIMEOUT:
-    msg = "Location request timed out. Showing default view.";
-    break;
-    default:
-    msg = "An unknown geolocation error occurred. Showing default view.";
+    console.warn(`Geolocation error (${err.code}): ${err.message}`);
+    let msg;
+    switch (err.code) {
+        case err.PERMISSION_DENIED:
+        msg = "Location permission was denied. Showing default view.";
+        break;
+        case err.POSITION_UNAVAILABLE:
+        msg = "Position unavailable. Showing default view.";
+        break;
+        case err.TIMEOUT:
+        msg = "Location request timed out. Showing default view.";
+        break;
+        default:
+        msg = "An unknown geolocation error occurred. Showing default view.";
+    }
+    alert(msg);
+    const defaultLatLng = [39.7983, -105.7778]; 
+    map.setView(defaultLatLng, 8);
 }
-alert(msg);
-const defaultLatLng = [39.7983, -105.7778]; 
-map.setView(defaultLatLng, 8);
+
+const loginModal   = document.getElementById('loginModal');
+const loginFields = document.querySelector('.login-fields');
+const regFields = document.querySelector('.registration-fields');
+const submitBtn = document.getElementById('submitBtn');
+const toggleBtn = document.getElementById('toggleBtn');
+const formTitle = document.getElementById('formTitle');
+
+function openAuthModal(mode /* "login" | "register" */){
+    if(mode === "login"){
+        loginFields.classList.remove('hidden');
+        regFields  .classList.add   ('hidden');
+        formTitle.textContent = "Please Log In";
+        submitBtn.textContent = "Login";
+        toggleBtn.textContent = "Create Account";
+    }else{
+        loginFields.classList.add   ('hidden');
+        regFields  .classList.remove('hidden');
+        formTitle.textContent = "Create Account";
+        submitBtn.textContent = "Create Account";
+        toggleBtn.textContent = "Cancel";
+    }
+    loginModal.classList.remove('hidden');
 }
 
 // overriding Leaflet’s global popup defaults:
@@ -109,14 +131,14 @@ if (currentRole === 'admin') {
 document.getElementById('adminPanelBtn').addEventListener('click', async function() {
     const authCredentials = localStorage.getItem('authCredentials');
     if (!authCredentials) {
-    alert("You are not logged in as admin!");
-    return;
+        alert("You are not logged in as admin!");
+        return;
     }
     try {
-    const response = await fetch('/api/admin/users', {
-        headers: {
-        'Authorization': 'Basic ' + authCredentials
-        }
+        const response = await fetch('/api/admin/users', {
+            headers: {
+            'Authorization': 'Basic ' + authCredentials
+            }
     });
     if (response.ok) {
         //await keyword waits parsing to finish
@@ -238,6 +260,65 @@ async function loadPins() {
     }
 }
 
+function onSuccessfulLogin(username){
+    hideLoginModal();
+    greeting.textContent = `Logged in as: ${username}!`;
+    greeting.classList.remove('hidden');
+    logoutBtn.classList.remove('hidden');
+    loginBtn .classList.add('hidden');
+    createBtn.classList.add('hidden');
+}
+
+function hideLoginModal(){ loginModal.classList.add('hidden'); }
+
+function updatePins(pin) {
+    console.log('WS → new pin', pin);
+
+    // build popup exactly like loadPins() does
+    const latNum = parseFloat(pin.lat);
+    const lngNum = parseFloat(pin.lng);
+
+    let popupContent = `<strong>${pin.name}</strong><br>${pin.description}<br>`;
+
+    if (pin.imageUrls && pin.imageUrls.length) {
+        const carId = `car-${pin.id}`;
+        popupContent += `
+        <div class="carousel" id="${carId}">
+          <button class="car-prev">◀</button>
+          <div class="car-images">
+            ${pin.imageUrls.map((u, i) => `
+                <img data-idx="${i}" src="${u}?t=${Date.now()}"
+                     class="car-img${i === 0 ? '' : ' hidden'}">`).join('')}
+          </div>
+          <button class="car-next">▶</button>
+        </div>`;
+    }
+
+    const formatted = new Date(pin.created_at)
+      .toLocaleString('en-US', { dateStyle: 'short', timeStyle: 'short' });
+    popupContent += `<p>User: ${pin.username}</p><p>Last Edited: ${formatted}</p>`;
+
+    if (canShare) {
+        popupContent += `<button class="share-pin" data-lat="${latNum}"
+                          data-lng="${lngNum}">Share</button><br>`;
+    }
+
+    const marker = L.marker([latNum, lngNum])
+        .bindPopup(popupContent, {
+            className: "pin-view-popup",
+            minWidth: 300, maxWidth: 400, maxHeight: 400,
+            autoPan: true, keepInView: true, autoPanPadding: [30, 30]
+        });
+
+    pinsGroup.addLayer(marker);
+}
+
+// buttons are now in the DOM
+const loginBtn  = document.getElementById('loginBtn');
+const createBtn = document.getElementById('createBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const greeting  = document.getElementById('userGreeting');
+
 document.addEventListener('DOMContentLoaded', () => {
     // connecting to my wS
     const protocol = (location.protocol === 'https:') ? 'wss' : 'ws';
@@ -245,38 +326,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // this is what sets up the WS to listen for pins
     ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    console.log('Received WebSocket message:', data);
-
-    updatePins(data);
+        const data = JSON.parse(event.data);
+        console.log('Received WebSocket message:', data);
+        updatePins(data);
     };
     // Handle the connection open event
     ws.onopen = () => {
-    console.log('WebSocket connection established.');
+        console.log('WebSocket connection established.');
     };
 
     // Handle errors
     ws.onerror = (error) => {
-    console.error('WebSocket error:', error);
+        console.error('WebSocket error:', error);
     };
 
     // Handle connection closure
     ws.onclose = () => {
-    console.log('WebSocket connection closed.');
-    };
+        console.log('WebSocket connection closed.');
+    };    
 
-    // function to update pins via WS
-    function updatePins(pinData) {
-    console.log('Updating pins:', pinData);
-    loadPins();
+    function handleLogout(){
+        localStorage.clear();
+        loginBtn.classList.remove('hidden');
+        createBtn.classList.remove('hidden');
+        logoutBtn.classList.add('hidden');
+        greeting.classList.add('hidden');
+        greeting.textContent = "You've been logged out";
     }
-});
 
+    loginBtn .addEventListener('click', () => openAuthModal('login'));
+    createBtn.addEventListener('click', () => openAuthModal('register'));
+    logoutBtn.addEventListener('click', handleLogout);
 
-// now loads pins regardless of being logged in
-window.addEventListener('DOMContentLoaded', function() {
     loadPins();
 });
+
 
 // Attach event listener to the login form.
 document.getElementById('loginForm').addEventListener('submit', async function(e) {
@@ -316,11 +400,12 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
             localStorage.setItem('loggedIn', 'true');
             localStorage.setItem('authCredentials', btoa(new_username + ':' + new_password));
             localStorage.setItem('role', data.role);
+            onSuccessfulLogin(new_username);
             // Reload pins to include user-specific buttons.
             loadPins();
             // Show the admin panel button if role is admin.
             if (data.role === 'admin') {
-            document.getElementById('adminPanelBtn').classList.remove('hidden');
+                document.getElementById('adminPanelBtn').classList.remove('hidden');
             }
         } else {
             alert("Account created, but automatic login failed. Please log in manually.");
@@ -347,19 +432,20 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
         });
         
         if (response.ok) {
-        const data = await response.json();
-        // If login is successful, set a flag and store credentials and role.
-        localStorage.setItem('loggedIn', 'true');
-        localStorage.setItem('authCredentials', btoa(username + ':' + password));
-        localStorage.setItem('role', data.role);
-        // Reload pins to include user-specific buttons.
-        loadPins();
-        // Show the admin panel button if user is admin.
-        if (data.role === 'admin') {
-            document.getElementById('adminPanelBtn').classList.remove('hidden');
-        }
+            const data = await response.json();
+            // If login is successful, set a flag and store credentials and role.
+            localStorage.setItem('loggedIn', 'true');
+            localStorage.setItem('authCredentials', btoa(username + ':' + password));
+            localStorage.setItem('role', data.role);
+            onSuccessfulLogin(username);  
+            // Reload pins to include user-specific buttons.
+            loadPins();
+            // Show the admin panel button if user is admin.
+            if (data.role === 'admin') {
+                document.getElementById('adminPanelBtn').classList.remove('hidden');
+            }
         } else {
-        alert('Login failed, please try again.');
+            alert('Login failed, please try again.');
         }
     } catch (error) {
         console.error('Error during login:', error);
@@ -369,13 +455,7 @@ document.getElementById('loginForm').addEventListener('submit', async function(e
 });
 
 // Toggle between Login and Create Account mode.
-document.getElementById('toggleBtn').addEventListener('click', function() {
-    // Select the registration fields container and login fields container
-    const loginFields = document.querySelector('.login-fields');
-    const regFields = document.querySelector('.registration-fields');
-    const submitBtn = document.getElementById('submitBtn');
-    const toggleBtn = document.getElementById('toggleBtn');
-    const formTitle = document.getElementById('formTitle');
+document.getElementById('toggleBtn').addEventListener('click', function() {   
 
     const loginUsername = document.getElementById('username');
     const loginPassword = document.getElementById('password');
@@ -424,42 +504,42 @@ document.getElementById('toggleBtn').addEventListener('click', function() {
 document.addEventListener('click', async (e) => {
     // Edit pin
     if (e.target && e.target.classList.contains('edit-pin')) {
-    const pinId = e.target.getAttribute('data-id');
-    const currentName = decodeURIComponent(e.target.getAttribute('data-name'));
-    const currentDescription = decodeURIComponent(e.target.getAttribute('data-description'));
-    const newName = prompt("Enter new pin name:", currentName);
-    const newDescription = prompt("Enter new description:", currentDescription);
-    if (newName !== null && newDescription !== null) {
-        try {
-        const auth = localStorage.getItem('authCredentials');
-        const response = await fetch('/api/endpoint', {
-            method: 'PUT',
-            headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Basic ' + auth
-            },
-            body: JSON.stringify({
-            id: pinId,
-            name: newName,
-            description: newDescription
-            })
-        });
-        if (response.ok) {
-            alert("Pin updated successfully.");
-            // Dynamically reload pins without a full page refresh.
-            loadPins();
-        } else {
-            alert("Failed to update pin.");
+        const pinId = e.target.getAttribute('data-id');
+        const currentName = decodeURIComponent(e.target.getAttribute('data-name'));
+        const currentDescription = decodeURIComponent(e.target.getAttribute('data-description'));
+        const newName = prompt("Enter new pin name:", currentName);
+        const newDescription = prompt("Enter new description:", currentDescription);
+        if (newName !== null && newDescription !== null) {
+            try {
+            const auth = localStorage.getItem('authCredentials');
+            const response = await fetch('/api/endpoint', {
+                method: 'PUT',
+                headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Basic ' + auth
+                },
+                body: JSON.stringify({
+                id: pinId,
+                name: newName,
+                description: newDescription
+                })
+            });
+            if (response.ok) {
+                alert("Pin updated successfully.");
+                // Dynamically reload pins without a full page refresh.
+                loadPins();
+            } else {
+                alert("Failed to update pin.");
+            }
+            } catch (err) {
+            console.error("Error updating pin:", err);
+            alert("Error updating pin.");
+            }
         }
-        } catch (err) {
-        console.error("Error updating pin:", err);
-        alert("Error updating pin.");
-        }
-    }
     }
     // Delete pin
     if (e.target && e.target.classList.contains('delete-pin')) {
-    const pinId = e.target.getAttribute('data-id');
+        const pinId = e.target.getAttribute('data-id');
     if (confirm("Are you sure you want to delete this pin?")) {
         try {
         const auth = localStorage.getItem('authCredentials');
@@ -479,8 +559,8 @@ document.addEventListener('click', async (e) => {
             alert("Failed to delete pin.");
         }
         } catch (err) {
-        console.error("Error deleting pin:", err);
-        alert("Error deleting pin.");
+            console.error("Error deleting pin:", err);
+            alert("Error deleting pin.");
         }
     }
     }
@@ -502,24 +582,193 @@ document.addEventListener('click', e => {
     images[newIdx]   .classList.remove('hidden');
 });
   
-// following 3 blocks are my 3 basemap layers, tileLayer is a leaflet module that
+
+// prepping to check if a popup form is already open so that they'll
+// close when the user clicks outside of the form.
+let currentPinMarker = null;
+// functionality for adding a pin (moved the map definition above so we can use it here)
+map.on('click', function(e) {
+    const isLoggedIn = localStorage.getItem('loggedIn');
+    console.log("Map clicked at:", e.latlng);
+    if (
+        currentPinMarker &&
+        currentPinMarker.getPopup() &&
+        currentPinMarker.getPopup().isOpen()
+      ) {
+        currentPinMarker.closePopup();
+        return;
+      }
+    // creates a new marker at the clicked location but that marker won't stay
+    // unless the user submits it with the required info attached
+    const newMarker = L.marker(e.latlng);
+    currentPinMarker = newMarker;
+    pinsGroup.addLayer(newMarker);
+    newMarker.submitted = false;
+
+    // removes the marker if the popup is closed without submission.
+    newMarker.on('popupclose', () => {
+    if (!newMarker.submitted) {
+        pinsGroup.removeLayer(newMarker);
+    }
+    currentPinMarker = null;
+    });
+
+    // cloning the template for the form so it can be reused fresh
+    // for each pin
+    const template = document.getElementById('pinFormTemplate');
+    const formClone = document.importNode(template.content, true);
+    // grabbing the form from the cloned template
+    const userPin = formClone.querySelector('#pinForm');
+
+    // having leaflet set the lat/lng values itself
+    userPin.querySelector('#lat').value = e.latlng.lat;
+    userPin.querySelector('#lng').value = e.latlng.lng;
+
+    // attaching an async event listener to the form so that
+    // it'll update without the user having to refresh the page
+    userPin.addEventListener('submit', async function(ev) {
+    ev.preventDefault(); // Prevent native submission.
+    console.log("Form submit event fired!");
+    if (!isLoggedIn) {
+        // Hide the modal.
+        alert("You must login to place a pin");
+        loginModal.classList.remove('hidden');
+    }
+    // this grabs the image file's 'name'
+    const fileInput = userPin.querySelector('input[name="image"]');
+
+    // creating formdata from the userpin form so that
+    // my backend can process it
+    const formData = new FormData(userPin);
+    console.log("Sending POST request with formData...");
+    
+    // if a user does choose to upload an image, this compresses it,
+    // saving a ton of headache of sending huge files to my server, and 
+    // then having to compress that on my backend
+    if (fileInput && fileInput.files.length) {
+        const maxPhotos = 5;
+        if (fileInput.files.length > maxPhotos) {
+            alert(`You selected ${fileInput.files.length} photos — only ${maxPhotos} can be uploaded.`);
+            return;                       // stop the submit
+        }
+    
+        const files = Array.from(fileInput.files);   // ≤ 5
+        const compressedFiles = [];
+    
+        const options = {
+            maxSizeMB: 1,           // tweak to taste
+            maxWidthOrHeight: 800,
+            useWebWorker: true
+        };
+    
+        try {
+            for (const f of files) {
+                const blob = await imageCompression(f, options);
+                compressedFiles.push(
+                    new File([blob], f.name, { type: blob.type })
+                );
+            }
+        } catch (err) {
+            console.error('compression failed', err);
+            alert('Could not compress photos – try again.');
+            return;
+        }
+
+        // ***Do NOT touch fileInput.files on iOS – instead append directly***
+        compressedFiles.forEach(f => formData.append('images[]', f));
+    }     
+
+    // Add the Authorization header for pin creation using stored credentials.
+    const authCredentials = localStorage.getItem('authCredentials');
+    let headers = {};
+    if (localStorage.getItem('authCredentials')) {
+        headers['Authorization'] = 'Basic ' + localStorage.getItem('authCredentials');
+    }
+    
+    //wrapped in a try block as this was a major source of bugs
+    // and i wanted debugging statements when this failed
+    try {
+        const response = await fetch('/api/endpoint', {
+        method: 'POST',
+        headers,
+        body: formData
+        });
+
+        if (!response.ok) {
+            const err = await response.json();
+            alert(err.error || 'You’ve hit your pin limit for today.');
+            return;
+        }
+
+        const data = await response.json();
+        console.log("Received data:", data);
+        
+        
+        //checking that the data is associated with an id
+        //if it is, we render the pop up with the image included
+        // ?t=${Date.now()} is a 'cache-busting' technique that ensures
+        // new images are displayed immediately.
+        if (data.id) {
+            updatePins(data);
+            newMarker.submitted = true;
+            newMarker.closePopup();
+        } else {
+        pinsGroup.removeLayer(newMarker);
+        alert("Submission failed. Please try again.");
+        }
+    } catch (fetchError) {
+        console.error("Error during fetch:", fetchError);
+        pinsGroup.removeLayer(newMarker);
+        alert("Submission failed. Please try again.");
+    }
+    });
+    
+    // making sure the submit button actually submits..
+    const saveBtn = userPin.querySelector('#submitbtn');
+    if (saveBtn) {
+    saveBtn.addEventListener('click', function() {
+        if (isLoggedIn) {
+        console.log("Submit button clicked!");
+        userPin.dispatchEvent(new Event("submit", { cancelable: true }));
+        }
+        if (!isLoggedIn) {
+            alert("Please create an account or login to place a pin");
+            loginModal.classList.remove('hidden');
+        }
+    });
+    } else {
+    console.error("Submit button not found in the cloned form.");
+    }
+    
+    //this attaches the popup to the cloned form (the userpin form the user fills out)
+    newMarker.bindPopup(formClone, {
+    minWidth: 300,          // at least 300px wide
+    maxWidth: 400,          // but no more than 400px
+    maxHeight: 350,         // cap height (will scroll if content overflows)
+    autoPan: true,          // pan map when popup opens
+    keepInView: true,       // ensure the whole popup stays in view
+    autoPanPadding: [30,30] // leave a 30px buffer from each map edge
+    })
+    .openPopup();
+});
+// following blocks are my basemap layers, tileLayer is a leaflet module that
 // ensures they're base layers rather than overlays
 const USGS_USTopo = L.tileLayer(
     'https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}',
     {
-    attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+        attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
     }
 );
 const USGS_USImageryTopo = L.tileLayer(
     'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryTopo/MapServer/tile/{z}/{y}/{x}',
     {
-    attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+        attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
     }
 );
 const USGS_sat = L.tileLayer(
     'https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/{z}/{y}/{x}',
     {
-    attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
+        attribution: 'Tiles courtesy of the <a href="https://usgs.gov/">U.S. Geological Survey</a>'
     }
 );
 const county_layer = L.esri.featureLayer({
@@ -551,213 +800,6 @@ const ski_areas = L.esri.featureLayer({
 //initializing my map with the combined satellite imagery and topography
 map.addLayer(USGS_USImageryTopo);
 
-// functionality for adding a pin (moved the map definition above so we can use it here)
-map.on('click', function(e) {
-    const isLoggedIn = localStorage.getItem('loggedIn');
-    console.log("Map clicked at:", e.latlng);
-
-    // creates a new marker at the clicked location but that marker won't stay
-    // unless the user submits it with the required info attached
-    const newMarker = L.marker(e.latlng);
-    pinsGroup.addLayer(newMarker);
-    newMarker.submitted = false;
-
-    // removes the marker if the popup is closed without submission.
-    newMarker.on('popupclose', () => {
-    if (!newMarker.submitted) {
-        pinsGroup.removeLayer(newMarker);
-    }
-    });
-
-    // cloning the template for the form so it can be reused fresh
-    // for each pin
-    const template = document.getElementById('pinFormTemplate');
-    const formClone = document.importNode(template.content, true);
-    // grabbing the form from the cloned template
-    const userPin = formClone.querySelector('#pinForm');
-
-    // having leaflet set the lat/lng values itself
-    userPin.querySelector('#lat').value = e.latlng.lat;
-    userPin.querySelector('#lng').value = e.latlng.lng;
-
-    // attaching an async event listener to the form so that
-    // it'll update without the user having to refresh the page
-    userPin.addEventListener('submit', async function(ev) {
-    ev.preventDefault(); // Prevent native submission.
-    console.log("Form submit event fired!");
-    if (!isLoggedIn) {
-    // Hide the modal.
-    document.getElementById('loginModal').style.display = 'flex';
-    }
-    // this grabs the image file's 'name'
-    const fileInput = userPin.querySelector('input[name="image"]');
-    
-    // if a user does choose to upload an image, this compresses it,
-    // saving a ton of headache of sending huge files to my server, and 
-    // then having to compress that on my backend
-    if (fileInput && fileInput.files && fileInput.files.length > 0) {
-        const files = Array.from(fileInput.files).slice(0, 5); // Limit to 4 photos max
-        if (files.length > 5) {
-            alert("You may only upload 5 photos per pin.");
-        }
-        const compressedFiles = [];
-      
-        //setting options for image sizing
-        const options = {
-          maxSizeMB: 10,
-          maxWidthOrHeight: 800,
-          useWebWorker: true
-        };
-      
-        try {
-          for (const originalFile of files) {
-            const compressedBlob = await imageCompression(originalFile, options);
-            //images go from a binary blob back to an image
-            const compressedFile = new File(
-              [compressedBlob],
-              originalFile.name,
-              { type: compressedBlob.type }
-            );
-      
-            compressedFiles.push(compressedFile);
-          }
-      
-          // Replace input with new compressed FileList
-          const dt = new DataTransfer();
-          compressedFiles.forEach(file => dt.items.add(file));
-          fileInput.files = dt.files;
-      
-          console.log("Compressed files:", fileInput.files);
-        } catch (compressionError) {
-          console.error("Error compressing image(s):", compressionError);
-        }
-    }      
-
-    // creating formdata from the userpin form so that
-    // my backend can process it
-    const formData = new FormData(userPin);
-    console.log("Sending POST request with formData...");
-
-    // Add the Authorization header for pin creation using stored credentials.
-    const authCredentials = localStorage.getItem('authCredentials');
-    let headers = {};
-    if (localStorage.getItem('authCredentials')) {
-        headers['Authorization'] = 'Basic ' + localStorage.getItem('authCredentials');
-    }
-    
-    //wrapped in a try block as this was a major source of bugs
-    // and i wanted debugging statements when this failed
-    try {
-        const response = await fetch('/api/endpoint', {
-        method: 'POST',
-        headers,
-        body: formData
-        });
-
-        if (!response.ok) {
-        const err = await response.json();
-        alert(err.error || 'You’ve hit your pin limit for today.');
-        return;
-        }
-
-        const data = await response.json();
-        console.log("Received data:", data);
-        
-        
-        //checking that the data is associated with an id
-        //if it is, we render the pop up with the image included
-        // ?t=${Date.now()} is a 'cache-busting' technique that ensures
-        // new images are displayed immediately.
-        if (data.id) {
-        // Build popup content immediately with Edit/Delete if user owns it.
-        let popupContent = `
-            <strong>${data.name}</strong><br>
-            ${data.description}<br>
-        `;
-
-        const raw = data.created_at;              
-        const iso = decodeURIComponent(raw); 
-        const dateObj = new Date(iso);
-        
-        const formatted = dateObj.toLocaleString('en-US', {
-            dateStyle:  'medium',   // e.g. “Apr 18, 2025”
-            timeStyle:  'short'     // e.g. “12:42 AM”
-        });
-
-        popupContent += `<p>Last Edited: ${formatted}</p>`;
-
-        if (data.imageUrl) {
-            popupContent += `<img src="${data.imageUrl}?t=${Date.now()}" style="max-width:100%; height:auto;"><br>`;
-        }
-        // Determine current user and role
-        const authCreds = localStorage.getItem('authCredentials');
-        let currentUser = "";
-        if (authCreds) {
-            currentUser = atob(authCreds).split(':')[0];
-        }
-        const currentRole = localStorage.getItem('role');
-
-        // Display the username
-        if (data.username) {
-            popupContent += `<p style="color: black; font-size: 16px;">User: ${data.username}</p>`;
-        }
-
-        // If the logged-in user is the owner or is an admin, add buttons.
-        if (data.username === currentUser || currentRole === 'admin') {
-            popupContent += `
-            <div class="pin-actions">
-            <button class="edit-pin" data-id="${data.id}" data-name="${encodeURIComponent(data.name)}" data-description="${encodeURIComponent(data.description)}">Edit</button>
-            <button class="delete-pin" data-id="${data.id}">Delete</button>
-            </div>
-            `;
-        }
-
-        newMarker.setPopupContent(popupContent);
-        newMarker.openPopup();
-        newMarker.submitted = true;
-
-        } else {
-        pinsGroup.removeLayer(newMarker);
-        alert("Submission failed. Please try again.");
-        }
-    } catch (fetchError) {
-        console.error("Error during fetch:", fetchError);
-        pinsGroup.removeLayer(newMarker);
-        alert("Submission failed. Please try again.");
-    }
-    });
-    
-    // making sure the submit button actually submits..
-    const submitBtn = userPin.querySelector('#submitbtn');
-    if (submitBtn) {
-    submitBtn.addEventListener('click', function() {
-        if (isLoggedIn) {
-        console.log("Submit button clicked!");
-        userPin.dispatchEvent(new Event("submit", { cancelable: true }));
-        }
-        if (!isLoggedIn) {
-        alert("You ust be logged in to place a pin..");
-        document.getElementById('loginModal').style.display = 'flex';
-        }
-    });
-    } else {
-    console.error("Submit button not found in the cloned form.");
-    }
-    
-    //this attaches the popup to the cloned form (the userpin form the user fills out)
-    newMarker.bindPopup(formClone, {
-    minWidth: 300,          // at least 300px wide
-    maxWidth: 400,          // but no more than 400px
-    maxHeight: 350,         // cap height (will scroll if content overflows)
-    autoPan: true,          // pan map when popup opens
-    keepInView: true,       // ensure the whole popup stays in view
-    autoPanPadding: [30,30] // leave a 30px buffer from each map edge
-    })
-    .openPopup();
-});
-// the links to CO's ArcGIS stuff for rendering overlays
-// there wasn't one federal land overlay so I combined all of them
-// I may want to revisit this.
 const federalLandURLs = [
     'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/68',
     'https://gis.colorado.gov/public/rest/services/OIT/Colorado_State_Basemap/MapServer/46',
