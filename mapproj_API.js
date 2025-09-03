@@ -13,10 +13,13 @@ const http  = require('http');
 const https = require('https');
 const fs = require('fs');
 
-console.log("DB_HOST:", process.env.DB_HOST);
-console.log("DB_USER:", process.env.DB_USER);
-console.log("DB_PASSWORD:", process.env.DB_PASSWORD);
-console.log("DB_NAME:", process.env.DB_NAME);
+//lines below are commented out as a security measure. 
+//They're relevant for my debugging so I leave them in
+//in case i need to uncomment when in my dev environment
+//console.log("DB_HOST:", process.env.DB_HOST);
+//console.log("DB_USER:", process.env.DB_USER);
+//console.log("DB_PASSWORD:", process.env.DB_PASSWORD);
+//console.log("DB_NAME:", process.env.DB_NAME);
 const connection = mysql.createConnection({
     host: process.env.DB_HOST,
     user: process.env.DB_USER,
