@@ -629,11 +629,12 @@ map.on('click', function(e) {
     userPin.addEventListener('submit', async function(ev) {
     ev.preventDefault(); // Prevent native submission.
     console.log("Form submit event fired!");
+
     if (!isLoggedIn) {
-        // Hide the modal.
-        alert("You must login to place a pin");
-        loginModal.classList.remove('hidden');
+    alert("Login is required to place a pin."); //changed this block so possible hiring managers can look at the site.
+    return;
     }
+
     // this grabs the image file's 'name'
     const fileInput = userPin.querySelector('input[name="image"]');
 

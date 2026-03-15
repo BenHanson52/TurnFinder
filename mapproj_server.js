@@ -1,10 +1,10 @@
 // mapproj_server.js
+require('dotenv').config({ path: '/var/www/mapproj/.env' });
 const fs        = require('fs');
 const http      = require('http');
 const https     = require('https');
 const { requestHandler } = require('./mapproj_API');
 const WebSocket = require('ws');
-require('dotenv').config({ path: '/var/www/mapproj/.env' });
 
 const isDev = process.env.NODE_ENV === 'development';
 const PORT  = process.env.PORT || 3001;
