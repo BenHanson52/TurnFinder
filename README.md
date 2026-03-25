@@ -52,22 +52,22 @@ Turnfinder is a full-stack web app for sharing and viewing off-season ski condit
   uploads/               # uploaded images
   ssl/                   # local/dev cert files
 
-How It Works
+**How It Works**
 
   The frontend loads a Leaflet map and pulls pin data from the backend through API routes. Logged-in users can create new pins with descriptions and photos,
   while admins have access to additional controls. Uploaded images are compressed in the browser before being sent to the backend.
   The backend stores pin and user data in MariaDB and serves updates to connected clients through WebSockets.
 
-User Roles <br>
+**User Roles** <br>
 
-Author
+*Author*
 
 -Create an account
 -Log in
 -Create pins
 -Edit/delete their own pins
 
-Admin
+*Admin*
 
 -All author permissions
 -View the admin panel
@@ -77,7 +77,7 @@ Admin
 
 This project has a development mode for local testing.
 
-Typical local setup
+**Typical local setup**
 
   Run a local MariaDB instance
   
@@ -89,7 +89,7 @@ Typical local setup
   
   Open the site locally in a browser
 
-Notes
+**Notes**
   
   The production deployment uses HTTPS
   
@@ -97,7 +97,7 @@ Notes
   
   Some functionality, such as image uploads and auth, depends on the backend and database being configured correctly.
 
-Production Deployment
+**Production Deployment**
 
   The project is deployed on an Akamai Linode Linux server with:
   
@@ -137,7 +137,7 @@ Production Deployment
 
 One of the biggest lessons from this project was how much full-stack development depends on understanding how the frontend, backend, database, DNS, server config, and SSL all interact. 
 
-Current Limitations
+**Current Limitations**
 
   -HEIC image uploads are not currently supported reliably, this is noted on the site for users.
   
@@ -163,7 +163,7 @@ Current Limitations
   
   -Additional map overlays and trail/snow data integrations, perhaps satellite view one day.
 
-Running Notes
+**Running Notes**
 
 This project was built as a practical full-stack deployment project and portfolio piece. It is not intended to be presented as a polished production SaaS app,
 but as a working application that demonstrates frontend integration, backend logic, deployment, and debugging across a real server environment.
