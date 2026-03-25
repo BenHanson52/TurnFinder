@@ -42,7 +42,6 @@ Turnfinder is a full-stack web app for sharing and viewing off-season ski condit
 
 ## Project Structure
 
-  ```text
   mapproj.html           # main frontend page
   mapproj_script.js      # frontend logic
   mapstyles.css          # frontend styling
