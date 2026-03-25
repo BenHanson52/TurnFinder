@@ -42,127 +42,97 @@ Turnfinder is a full-stack web app for sharing and viewing off-season ski condit
 
 ## Project Structure
 
-  mapproj.html           # main frontend page
-  mapproj_script.js      # frontend logic
-  mapstyles.css          # frontend styling
-  mapproj_server.js      # HTTPS/HTTP server and WebSocket setup
-  mapproj_API.js         # backend request handling and API routes
-  ecosystem.config.js    # PM2 config
-  uploads/               # uploaded images
-  ssl/                   # local/dev cert files
+  mapproj.html           # main frontend page <br>
+  mapproj_script.js      # frontend logic<br>
+  mapstyles.css          # frontend styling <br>
+  mapproj_server.js      # HTTPS/HTTP server and WebSocket setup <br>
+  mapproj_API.js         # backend request handling and API routes <br>
+  ecosystem.config.js    # PM2 config <br>
+  uploads/               # uploaded images <br>
+  ssl/                   # local/dev cert files <br>
 
-**How It Works**
+## How It Works
 
-  The frontend loads a Leaflet map and pulls pin data from the backend through API routes. Logged-in users can create new pins with descriptions and photos,
-  while admins have access to additional controls. Uploaded images are compressed in the browser before being sent to the backend.
-  The backend stores pin and user data in MariaDB and serves updates to connected clients through WebSockets.
+The frontend loads a Leaflet map and pulls pin data from the backend through API routes. Logged-in users can create new pins with descriptions and photos, while admins have access to additional controls. Uploaded images are compressed in the browser before being sent to the backend. The backend stores pin and user data in MariaDB and serves updates to connected clients through WebSockets.
 
-**User Roles** <br>
+## User Roles
 
-*Author*
+### Author
 
--Create an account
--Log in
--Create pins
--Edit/delete their own pins
+- Create an account
+- Log in
+- Create pins
+- Edit/delete their own pins
 
-*Admin*
+### Admin
 
--All author permissions
--View the admin panel
--View user information
--Edit/delete any pin
--Local Development
+- All author permissions
+- View the admin panel
+- View user information
+- Edit/delete any pin
+
+## Local Development
 
 This project has a development mode for local testing.
 
-**Typical local setup**
+## Typical local setup
 
-  Run a local MariaDB instance
-  
-  Create a development database
-  
-  Configure local environment variables / PM2 dev config
-  
-  Start the server in development mode
-  
-  Open the site locally in a browser
+- Run a local MariaDB instance
+- Create a development database
+- Configure local environment variables / PM2 dev config
+- Start the server in development mode
+- Open the site locally in a browser
 
-**Notes**
-  
-  The production deployment uses HTTPS
-  
-  Local development may use a separate dev certificate or HTTP depending on config
-  
-  Some functionality, such as image uploads and auth, depends on the backend and database being configured correctly.
+## Notes
 
-**Production Deployment**
+- The production deployment uses HTTPS
+- Local development may use a separate dev certificate or HTTP depending on config
+- Some functionality, such as image uploads and auth, depends on the backend and database being configured correctly.
 
-  The project is deployed on an Akamai Linode Linux server with:
-  
-  NGINX serving the frontend and reverse proxying API traffic
-  
-  PM2 running the Node.js backend
-  
-  MariaDB storing user and pin data
-  
-  Cloudflare handling DNS
-  
-  Certbot providing HTTPS certificates
-  
-  Challenges / What I Learned
-  
-  This project involved more than frontend work. In building and deploying it, I had to work through:
-  
-  map-based frontend interaction
-  
-  user authentication and roles
-  
-  browser-side image handling
-  
-  backend request routing
-  
-  MariaDB schema and data management
-  
-  DNS setup
-  
-  NGINX routing and reverse proxy configuration
-  
-  SSL certificate issuance and renewal
-  
-  PM2 process management
-  
-  debugging deployment issues across multiple layers
+## Production Deployment
 
-One of the biggest lessons from this project was how much full-stack development depends on understanding how the frontend, backend, database, DNS, server config, and SSL all interact. 
+The project is deployed on an Akamai Linode Linux server with:
 
-**Current Limitations**
+- NGINX serving the frontend and reverse proxying API traffic
+- PM2 running the Node.js backend
+- MariaDB storing user and pin data
+- Cloudflare handling DNS
+- Certbot providing HTTPS certificates
 
-  -HEIC image uploads are not currently supported reliably, this is noted on the site for users.
-  
-  -The codebase could be cleaned up and modularized further
-  
-  -Error handling and validation could be improved in several places
-  
-  -Some deployment/configuration steps are still fairly manual
-  
- -Future Improvements
-  
-  -Better upload validation and file-type handling
-  
-  -Cleaner API structure
-  
-  -More robust admin tools
-  
-  -Improved mobile UX
-  
-  -Better filtering/searching of reports
-  
-  -Stronger setup automation
-  
-  -Additional map overlays and trail/snow data integrations, perhaps satellite view one day.
+## Challenges / What I Learned
 
-**Running Notes**
+This project involved more than frontend work. In building and deploying it, I had to work through:
 
-This project was built as a practical full-stack deployment project and portfolio piece. It is not intended to be presented as a polished production SaaS app,
-but as a working application that demonstrates frontend integration, backend logic, deployment, and debugging across a real server environment.
+- map-based frontend interaction
+- user authentication and roles
+- browser-side image handling
+- backend request routing
+- MariaDB schema and data management
+- DNS setup
+- NGINX routing and reverse proxy configuration
+- SSL certificate issuance and renewal
+- PM2 process management
+- debugging deployment issues across multiple layers
+
+One of the biggest lessons from this project was how much full-stack development depends on understanding how the frontend, backend, database, DNS, server config, and SSL all interact.
+
+## Current Limitations
+
+- HEIC image uploads are not currently supported reliably; this is noted on the site for users.
+- The codebase could be cleaned up and modularized further.
+- Error handling and validation could be improved in several places.
+- Some deployment/configuration steps are still fairly manual.
+
+## Future Improvements
+
+- Better upload validation and file-type handling
+- Cleaner API structure
+- More robust admin tools
+- Improved mobile UX
+- Better filtering/searching of reports
+- Stronger setup automation
+- Additional map overlays and trail/snow data integrations, perhaps satellite view one day.
+
+## Running Notes
+
+This project was built as a practical full-stack deployment project and portfolio piece. It is not intended to be presented as a polished production SaaS app, but as a working application that demonstrates frontend integration, backend logic, deployment, and debugging across a real server environment.
