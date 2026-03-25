@@ -58,21 +58,23 @@ How It Works
   while admins have access to additional controls. Uploaded images are compressed in the browser before being sent to the backend.
   The backend stores pin and user data in MariaDB and serves updates to connected clients through WebSockets.
 
-User Roles
+User Roles <br>
+
 Author
-  Create an account
-  Log in
-  Create pins
-  Edit/delete their own pins
+
+'''Create an account
+'''Log in
+'''Create pins
+'''Edit/delete their own pins
 
 Admin
 
-  All author permissions
-  View the admin panel
-  View user information
-  Edit/delete any pin
-  Local Development
-  This project has a development mode for local testing.
+'''All author permissions
+'''View the admin panel
+'''View user information
+'''Edit/delete any pin
+'''Local Development
+This project has a development mode for local testing.
 
 Typical local setup
 
