@@ -42,14 +42,16 @@ Turnfinder is a full-stack web app for sharing and viewing off-season ski condit
 
 ## Project Structure
 
-  mapproj.html           # main frontend page <br>
-  mapproj_script.js      # frontend logic<br>
-  mapstyles.css          # frontend styling <br>
-  mapproj_server.js      # HTTPS/HTTP server and WebSocket setup <br>
-  mapproj_API.js         # backend request handling and API routes <br>
-  ecosystem.config.js    # PM2 config <br>
-  uploads/               # uploaded images <br>
-  ssl/                   # local/dev cert files <br>
+| File | Purpose |
+|---|---|
+| `mapproj.html` | main frontend page |
+| `mapproj_script.js` | frontend logic |
+| `mapstyles.css` | frontend styling |
+| `mapproj_server.js` | HTTPS/HTTP server and WebSocket setup |
+| `mapproj_API.js` | backend request handling and API routes |
+| `ecosystem.config.js` | PM2 config |
+| `uploads/` | uploaded images |
+| `ssl/` | local/dev cert files |
 
 ## How It Works
 
