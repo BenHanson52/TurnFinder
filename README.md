@@ -62,18 +62,19 @@ User Roles <br>
 
 Author
 
-'''Create an account
-'''Log in
-'''Create pins
-'''Edit/delete their own pins
+-Create an account
+-Log in
+-Create pins
+-Edit/delete their own pins
 
 Admin
 
-'''All author permissions
-'''View the admin panel
-'''View user information
-'''Edit/delete any pin
-'''Local Development
+-All author permissions
+-View the admin panel
+-View user information
+-Edit/delete any pin
+-Local Development
+
 This project has a development mode for local testing.
 
 Typical local setup
@@ -94,11 +95,11 @@ Notes
   
   Local development may use a separate dev certificate or HTTP depending on config
   
-  Some functionality, such as image uploads and auth, depends on the backend and database being configured correctly
+  Some functionality, such as image uploads and auth, depends on the backend and database being configured correctly.
 
 Production Deployment
 
-  The project is deployed on a Linux server with:
+  The project is deployed on an Akamai Linode Linux server with:
   
   NGINX serving the frontend and reverse proxying API traffic
   
@@ -134,33 +135,33 @@ Production Deployment
   
   debugging deployment issues across multiple layers
 
-One of the biggest lessons from this project was how much full-stack development depends on understanding how the frontend, backend, database, DNS, server config, and SSL all interact.
+One of the biggest lessons from this project was how much full-stack development depends on understanding how the frontend, backend, database, DNS, server config, and SSL all interact. 
 
 Current Limitations
 
-  HEIC image uploads are not currently supported reliably
+  -HEIC image uploads are not currently supported reliably, this is noted on the site for users.
   
-  The codebase could be cleaned up and modularized further
+  -The codebase could be cleaned up and modularized further
   
-  Error handling and validation could be improved in several places
+  -Error handling and validation could be improved in several places
   
-  Some deployment/configuration steps are still fairly manual
+  -Some deployment/configuration steps are still fairly manual
   
-  Future Improvements
+ -Future Improvements
   
-  Better upload validation and file-type handling
+  -Better upload validation and file-type handling
   
-  Cleaner API structure
+  -Cleaner API structure
   
-  More robust admin tools
+  -More robust admin tools
   
-  Improved mobile UX
+  -Improved mobile UX
   
-  Better filtering/searching of reports
+  -Better filtering/searching of reports
   
-  Stronger documentation and setup automation
+  -Stronger setup automation
   
-  Additional map overlays and trail/snow data integrations
+  -Additional map overlays and trail/snow data integrations, perhaps satellite view one day.
 
 Running Notes
 
